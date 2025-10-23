@@ -197,10 +197,10 @@
 
         // Police
         let police = [];
-        const COP_SPEED = 220;
+        const COP_SPEED = 230;
         const COP_TURN_SPEED = 2.0;
         let spawnTimer = 0;
-        let spawnInterval = 4; // Spawn a cop every 4 seconds
+        let spawnInterval = 5; // Spawn a cop every 5 seconds
 
         // Input
         const input = {
@@ -252,7 +252,7 @@
             score = 0;
             gameTime = 0;
             spawnTimer = 2; // Spawn first cop quickly
-            spawnInterval = 4;
+            spawnInterval = 5;
             gameState = 'playing';
 
             gameOverModal.style.display = 'none';
