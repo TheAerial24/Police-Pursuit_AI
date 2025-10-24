@@ -61,7 +61,7 @@ let spawnTimer=0,spawnInterval=5;
 const input={left:false,right:false,fire:false};
 let player={},police=[],particles=[],contrails=[],bullets=[];
 let lastShotTime=0,SHOT_COOLDOWN=25,BULLET_SPEED=1500,BULLET_RADIUS=5;
-let highScore=Number(localStorage.getItem('pp_jet_game_highscore_v4')||0); 
+let highScore=Number(localStorage.getItem('pp_jet_game_final')||0); 
 
 const MINIMAP_SCOPE = 4000;
 const COP_SPAWN_INVULNERABILITY = 2.0;
@@ -102,7 +102,7 @@ gameState='gameOver';
 scoreDisplay.style.display='none';
 messageOverlay.style.display='none';
 finalScoreDisplay.textContent=score;
-if(score>highScore){highScore=score;localStorage.setItem('pp_jet_game_highscore_v4',highScore);}
+if(score>highScore){highScore=score;localStorage.setItem('pp_jet_game_final',highScore);}
 bestScoreDisplay.textContent=highScore;
 gameOverModal.style.display='block';
 }
@@ -314,7 +314,6 @@ for(let s of contrails){
 for(let p of particles){ctx.fillStyle=`rgba(255,165,0,${p.life/p.maxLife})`;ctx.beginPath();ctx.arc(p.x,p.y,p.size,0,Math.PI * 2);ctx.fill();}
 for(let b of bullets){ctx.fillStyle='yellow';ctx.beginPath();ctx.arc(b.x,b.y,BULLET_RADIUS,0,Math.PI * 2);ctx.fill();}
 
-// --- THIS IS THE FIX ---
 // Only draw the player if the game has started and the player object exists
 if (player && player.x !== undefined) {
     drawJet(ctx, player);
@@ -343,8 +342,9 @@ if(e.key==='ArrowRight')input.right=true;
 if(e.code==='Space')input.fire=true;
 });
 
+// --- THIS WAS THE BUG. IT IS NOW FIXED. ---
 window.addEventListener('keyup',e=>{
-if(e.keykey==='ArrowLeft')input.left=false;
+if(e.key==='ArrowLeft')input.left=false; // Was e.keykey
 if(e.key==='ArrowRight')input.right=false;
 if(e.code==='Space')input.fire=false;
 });
@@ -359,7 +359,6 @@ function spawnBulletFromCar(car){
 const noseOffset=(car.height/2)+6;
 const bx=car.x+Math.cos(car.angle)*noseOffset;
 const by=car.y+Math.sin(car.angle)*noseOffset;
-// --- My previous typo was here, it is now fixed ---
 bullets.push({x:bx,y:by,vx:Math.cos(car.angle)*BULLET_SPEED,vy:Math.sin(car.angle)*BULLET_SPEED,life:2.5,radius:BULLET_RADIUS});
 }
 
