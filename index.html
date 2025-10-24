@@ -1,482 +1,171 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
-<title>Police Pursuit — Drift Edition</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Police Pursuit</title>
 <style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  html,body{width:100%;height:100%;overflow:hidden;font-family:'Inter',sans-serif;background:#111827;color:#fff}
-  #gameCanvas{position:absolute;left:0;top:0;display:block;background:#374151}
-  .ui-container{position:absolute;top:0;left:0;width:100%;height:100%;z-index:2;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;align-items:center}
-  #scoreDisplay{font-size:3rem;font-weight:900;margin-top:1rem;text-shadow:0 0 10px rgba(0,0,0,0.6)}
-  #highScoreDisplay{position:absolute;top:1.2rem;right:1.5rem;font-size:1.1rem;font-weight:700;color:#9CA3AF}
-  #messageOverlay{font-size:1.2rem;font-weight:700;text-align:center;animation:pulse 1.8s infinite;pointer-events:auto}
-  @keyframes pulse{0%{opacity:1}50%{opacity:.7}100%{opacity:1}}
-  #gameOverModal{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#1F2937;padding:2rem;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.45);display:none;pointer-events:auto;text-align:center;z-index:4}
-  #gameOverModal h1{font-size:2.2rem;margin-bottom:.3rem}
-  #gameOverModal p{color:#D1D5DB;margin-bottom:1rem}
-  #restartButton{background:#3B82F6;color:#fff;border:0;padding:.9rem 1.6rem;border-radius:8px;font-weight:700;cursor:pointer}
-  .touch-zone{position:absolute;top:0;width:50%;height:100%;z-index:1}
-  #touchLeft{left:0}#touchRight{right:0}
+html,body {margin:0; padding:0; overflow:hidden; background:#1a1a1a; touch-action:none;}
+canvas {display:block; background:#333;}
+#ui {position:absolute; top:0; left:0; width:100%; color:white; font-family:sans-serif; text-align:center;}
+#score {font-size:2em; margin-top:10px;}
+#highScore {font-size:1em; color:#aaa;}
+#message {position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:1.5em; text-align:center;}
+#gameOver {position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:#222; padding:20px; border-radius:10px; display:none;}
+button {padding:10px 20px; font-size:1em; margin-top:10px;}
 </style>
 </head>
 <body>
-<canvas id="gameCanvas"></canvas>
-
-<!-- touch left/right zones (useful for mobile and pointerstart to start) -->
-<div class="touch-zone" id="touchLeft"></div>
-<div class="touch-zone" id="touchRight"></div>
-
-<div class="ui-container" aria-hidden="true">
-  <div id="scoreDisplay">0</div>
-  <div id="highScoreDisplay">🏁 High: 0</div>
-  <div id="messageOverlay">Tap or Click / Press any key to Start<br>(Left / Right arrows or touch sides to steer)</div>
+<canvas id="game"></canvas>
+<div id="ui">
+  <div id="score">Score: 0</div>
+  <div id="highScore">High Score: 0</div>
 </div>
-
-<div id="gameOverModal" role="dialog" aria-live="polite">
-  <h1>Game Over</h1>
-  <p>Your final score: <strong id="finalScore">0</strong><br>Best score: <strong id="bestScore">0</strong></p>
-  <button id="restartButton">Retry</button>
+<div id="message">Tap or Press Any Key to Start</div>
+<div id="gameOver">
+  <div id="finalScore"></div>
+  <div id="bestScore"></div>
+  <button onclick="resetGame()">Retry</button>
 </div>
 
 <script>
-/* --------------------
-   Config & DOM
-   -------------------- */
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+function resize(){canvas.width=innerWidth;canvas.height=innerHeight;}
+window.addEventListener("resize",resize);resize();
 
-const scoreDisplay = document.getElementById('scoreDisplay');
-const highScoreDisplay = document.getElementById('highScoreDisplay');
-const messageOverlay = document.getElementById('messageOverlay');
-const gameOverModal = document.getElementById('gameOverModal');
-const finalScoreEl = document.getElementById('finalScore');
-const bestScoreEl = document.getElementById('bestScore');
-const restartButton = document.getElementById('restartButton');
-const touchLeft = document.getElementById('touchLeft');
-const touchRight = document.getElementById('touchRight');
+let keys = {left:false, right:false};
+let score = 0, highScore = Number(localStorage.getItem("pp_highscore")||0);
+let playing = false, gameOver = false;
 
-let lastTime = performance.now();
-let gameState = 'menu'; // 'menu' | 'playing' | 'gameOver'
-let score = 0;
-let gameTime = 0;
-let highScore = Number(localStorage.getItem('highScore') || 0);
-
-/* --------------------
-   World & Entities
-   -------------------- */
-const camera = { x: 0, y: 0 };
-const worldGridSize = 100;
-
-const CAR_W = 22, CAR_H = 44;
-const CAR_RADIUS = 20;
-
-const PLAYER_BASE_SPEED = 380;   // forward speed magnitude
-const PLAYER_TURN_SPEED = 3.8;   // yaw speed (radians/s)
-const DRIFT_RELEASE = 0.06;      // how fast lateral velocity decays
-
-let player = createPlayer(0, 0); // will be set properly on resetGame
+const player = {x:0,y:0,angle:0,speed:3,velX:0,velY:-3,width:20,height:40,drift:0};
 let police = [];
-let particles = [];
 let skidMarks = [];
 let scenery = [];
 
-const input = { left: false, right: false };
-
-/* --------------------
-   Utility
-   -------------------- */
-function resizeCanvas(){
-  canvas.width = Math.max(640, window.innerWidth);
-  canvas.height = Math.max(480, window.innerHeight);
+function startGame(){
+  playing = true; gameOver = false; score = 0;
+  player.x=0;player.y=0;player.angle=-Math.PI/2;player.velX=0;player.velY=-3;player.drift=0;
+  police=[];skidMarks=[];scenery=[];
+  for(let i=0;i<200;i++){scenery.push({x:(Math.random()-0.5)*2000,y:(Math.random()-0.5)*2000,size:Math.random()*30+10})}
+  document.getElementById("message").style.display="none";
+  document.getElementById("gameOver").style.display="none";
 }
-function rand(min, max){ return Math.random() * (max - min) + min; }
-function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
-function dist(ax,ay,bx,by){ return Math.hypot(bx-ax, by-ay); }
-function wrapAngle(a){ return (a + Math.PI) % (Math.PI * 2) - Math.PI; }
-
-/* --------------------
-   Entities
-   -------------------- */
-function createPlayer(x=2500,y=2500){
-  // velocity vector models actual motion; heading (angle) is car facing.
-  return {
-    x, y,
-    angle: -Math.PI/2,
-    speed: PLAYER_BASE_SPEED,
-    vx: Math.cos(-Math.PI/2) * PLAYER_BASE_SPEED,
-    vy: Math.sin(-Math.PI/2) * PLAYER_BASE_SPEED,
-    driftAngle: 0,
-    radius: CAR_RADIUS,
-    color: '#3B82F6',
-    width: CAR_W,
-    height: CAR_H
-  };
-}
-function createCop(x,y,angle){
-  return { x, y, angle, speed: 403, turnSpeed: 2.0, radius: CAR_RADIUS, color:'#EF4444', width:CAR_W, height:CAR_H };
-}
-
-/* --------------------
-   Reset / Scenery
-   -------------------- */
-function resetGame(){
-  player = createPlayer(2500, 2500);
-  police = [];
-  particles = [];
-  skidMarks = [];
-  scenery = [];
-  score = 0;
-  gameTime = 0;
-  spawnTimer = 1.5;
-  spawnInterval = 5;
-  messageOverlay.style.display = 'none';
-  gameOverModal.style.display = 'none';
-  gameState = 'playing';
-  highScoreDisplay.textContent = `🏁 High: ${Math.floor(highScore)}`;
-  createScenery();
-}
-
-function createScenery(){
-  // scatter some "trees/buildings" around near player
-  for(let i=0;i<300;i++){
-    const a = Math.random() * Math.PI*2;
-    const d = rand(200, 2200);
-    scenery.push({
-      x: player.x + Math.cos(a) * d,
-      y: player.y + Math.sin(a) * d,
-      size: rand(14, 56),
-      color: Math.random() > 0.5 ? '#14532D' : '#4B5563',
-    });
-  }
-}
-
-/* --------------------
-   Spawn cops
-   -------------------- */
-let spawnTimer = 2;
-let spawnInterval = 5;
 
 function spawnPolice(){
-  const a = Math.random() * Math.PI*2;
-  const d = Math.max(canvas.width, canvas.height) * 0.7;
-  const x = player.x + Math.cos(a) * d;
-  const y = player.y + Math.sin(a) * d;
-  const ang = Math.atan2(player.y - y, player.x - x);
-  police.push(createCop(x, y, ang));
+  const angle=Math.random()*Math.PI*2;
+  const dist=400;
+  police.push({x:player.x+Math.cos(angle)*dist,y:player.y+Math.sin(angle)*dist,angle:angle,speed:2});
 }
 
-/* --------------------
-   Physics & Update
-   -------------------- */
-function update(dt){
-  if(!dt || dt > 0.5) return; // guard big dt
+function update(){
+  if(!playing)return;
+  score += 0.05;
+  document.getElementById("score").textContent = "Score: "+Math.floor(score);
+  document.getElementById("highScore").textContent = "High Score: "+Math.floor(highScore);
 
-  gameTime += dt;
-  score += dt * 10;
-  scoreDisplay.textContent = Math.floor(score);
+  // Drift steering
+  if(keys.left) player.angle -= 0.04;
+  if(keys.right) player.angle += 0.04;
 
-  // update high score live (so player sees it)
-  if(score > highScore){
-    highScore = score;
-    localStorage.setItem('highScore', String(Math.floor(highScore)));
-    highScoreDisplay.textContent = `🏁 High: ${Math.floor(highScore)}`;
+  player.velX += Math.cos(player.angle)*0.1;
+  player.velY += Math.sin(player.angle)*0.1;
+  player.velX *= 0.98;
+  player.velY *= 0.98;
+
+  player.x += player.velX;
+  player.y += player.velY;
+
+  // Add skid marks when turning
+  if(keys.left||keys.right){
+    skidMarks.push({x:player.x,y:player.y,angle:player.angle,life:1});
+    if(skidMarks.length>300) skidMarks.shift();
   }
 
-  // Player steering input -> drift target
-  let targetDrift = 0;
-  if(input.left) targetDrift = -1;
-  if(input.right) targetDrift = 1;
-
-  // Smooth the drift angle (visual & used to compute drift factor)
-  player.driftAngle += (targetDrift - player.driftAngle) * 8 * dt; // responsive
-
-  // Rotate the car heading (angle) based on driftAngle (steering input)
-  player.angle += PLAYER_TURN_SPEED * dt * player.driftAngle;
-
-  // Velocity wants to align to heading (forward vector), but we intentionally 'lag'
-  const desiredVx = Math.cos(player.angle) * player.speed;
-  const desiredVy = Math.sin(player.angle) * player.speed;
-
-  // The amount of 'slip' -- bigger when driftAngle large (sliding)
-  const slipFactor = clamp(0.05 + Math.abs(player.driftAngle) * 0.35, 0.05, 0.6);
-
-  // Blend velocity toward desired velocity (lower blend => more slide)
-  player.vx += (desiredVx - player.vx) * (1 - slipFactor);
-  player.vy += (desiredVy - player.vy) * (1 - slipFactor);
-
-  // Apply slight lateral damping so skid eventually straightens
-  player.vx *= (1 - DRIFT_RELEASE * dt);
-  player.vy *= (1 - DRIFT_RELEASE * dt);
-
-  // Move player by velocity
-  player.x += player.vx * dt;
-  player.y += player.vy * dt;
-
-  // Create skid marks when drifting strongly
-  if(Math.abs(player.driftAngle) > 0.15){
-    // push skid mark with orientation (perp to travel direction) and lifetime
-    skidMarks.push({
-      x: player.x - Math.cos(player.angle) * 14,
-      y: player.y - Math.sin(player.angle) * 14,
-      angle: player.angle,
-      life: 1.0,
-      width: rand(8, 14)
-    });
-    if(skidMarks.length > 600) skidMarks.shift();
+  // Police movement
+  for(let p of police){
+    const a=Math.atan2(player.y-p.y,player.x-p.x);
+    p.x+=Math.cos(a)*p.speed;
+    p.y+=Math.sin(a)*p.speed;
+    if(Math.hypot(player.x-p.x,player.y-p.y)<25) endGame();
   }
 
-  // Update skid marks life
-  for(let i = skidMarks.length - 1; i >= 0; i--){
-    skidMarks[i].life -= dt * 0.6;
-    if(skidMarks[i].life <= 0) skidMarks.splice(i, 1);
-  }
-
-  // Update police AI: simple chase with turning limit
-  for(const cop of police){
-    const targetAngle = Math.atan2(player.y - cop.y, player.x - cop.x);
-    let diff = wrapAngle(targetAngle - cop.angle);
-    const maxTurn = cop.turnSpeed * dt;
-    if(Math.abs(diff) > maxTurn) diff = Math.sign(diff) * maxTurn;
-    cop.angle += diff;
-    cop.x += Math.cos(cop.angle) * cop.speed * dt;
-    cop.y += Math.sin(cop.angle) * cop.speed * dt;
-  }
-
-  // Particles update
-  for(let i = particles.length - 1; i >= 0; i--){
-    const p = particles[i];
-    p.x += p.vx * dt;
-    p.y += p.vy * dt;
-    p.life -= dt;
-    if(p.life <= 0) particles.splice(i, 1);
-  }
-
-  // Spawning cops faster over time
-  spawnTimer -= dt;
-  if(spawnTimer <= 0){
-    spawnPolice();
-    spawnTimer = spawnInterval;
-    if(spawnInterval > 1) spawnInterval *= 0.95;
-  }
-
-  checkCollisions();
+  if(Math.random()<0.02 && police.length<10) spawnPolice();
 }
 
-/* --------------------
-   Collision / Explosions
-   -------------------- */
-function checkCollisions(){
-  for(let i = police.length - 1; i >= 0; i--){
-    const cop = police[i];
-    if(dist(player.x, player.y, cop.x, cop.y) < player.radius + cop.radius){
-      // explosion
-      spawnExplosion(player.x, player.y, 28);
-      spawnExplosion(cop.x, cop.y, 12);
-      police.splice(i, 1);
-      showGameOver();
-      break;
-    }
-  }
-}
-
-function spawnExplosion(x, y, count){
-  for(let i=0;i<count;i++){
-    const a = Math.random() * Math.PI * 2;
-    const s = rand(80, 260);
-    const life = rand(0.45, 1.25);
-    particles.push({
-      x, y,
-      vx: Math.cos(a) * s,
-      vy: Math.sin(a) * s,
-      life, maxLife: life,
-      size: rand(2, 5)
-    });
-  }
-}
-
-/* --------------------
-   Draw
-   -------------------- */
 function draw(){
-  // Clear & camera transform
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  camera.x = player.x;
-  camera.y = player.y;
   ctx.save();
-  ctx.translate(canvas.width/2 - camera.x, canvas.height/2 - camera.y);
+  ctx.translate(canvas.width/2-player.x, canvas.height/2-player.y);
 
-  // background road area (big rect to cover)
-  ctx.fillStyle = '#374151';
-  ctx.fillRect(camera.x - canvas.width, camera.y - canvas.height, canvas.width * 2, canvas.height * 2);
+  // Draw scenery
+  ctx.fillStyle="#2f2";
+  for(let s of scenery){ctx.beginPath();ctx.arc(s.x,s.y,s.size,0,Math.PI*2);ctx.fill();}
 
-  // grid
-  ctx.strokeStyle = '#4B5563';
-  ctx.lineWidth = 1;
-  const left = player.x - canvas.width/2;
-  const top = player.y - canvas.height/2;
-  const right = left + canvas.width;
-  const bottom = top + canvas.height;
-  for(let gx = Math.floor(left / worldGridSize) * worldGridSize; gx <= right; gx += worldGridSize){
-    ctx.beginPath(); ctx.moveTo(gx, top); ctx.lineTo(gx, bottom); ctx.stroke();
-  }
-  for(let gy = Math.floor(top / worldGridSize) * worldGridSize; gy <= bottom; gy += worldGridSize){
-    ctx.beginPath(); ctx.moveTo(left, gy); ctx.lineTo(right, gy); ctx.stroke();
-  }
-
-  // scenery (draw behind cars)
-  for(const s of scenery){
-    const dx = s.x - player.x, dy = s.y - player.y;
-    // small culling: only draw near visible region
-    if(Math.abs(dx) < canvas.width && Math.abs(dy) < canvas.height){
-      ctx.fillStyle = s.color;
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, s.size, 0, Math.PI*2);
-      ctx.fill();
-    }
-  }
-
-  // skid marks (draw under cars; fade by life)
-  ctx.save();
-  for(const s of skidMarks){
+  // Skid marks
+  for(let s of skidMarks){
+    s.life -= 0.01;
     ctx.save();
-    ctx.translate(s.x, s.y);
-    ctx.rotate(s.angle + Math.PI/2); // draw a small line roughly perpendicular to travel for a tire mark
-    ctx.globalAlpha = Math.max(0, s.life) * 0.8;
-    ctx.fillStyle = 'rgba(20,20,20,0.95)';
-    ctx.fillRect(-s.width/2, -2.5, s.width, 5);
+    ctx.translate(s.x,s.y);
+    ctx.rotate(s.angle);
+    ctx.fillStyle=`rgba(0,0,0,${s.life})`;
+    ctx.fillRect(-10,-2,20,4);
     ctx.restore();
   }
-  ctx.restore();
-  ctx.globalAlpha = 1;
 
-  // particles (explosions)
-  for(const p of particles){
-    const alpha = Math.max(0, p.life / p.maxLife);
-    ctx.fillStyle = `rgba(255,165,0,${alpha})`;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
-    ctx.fill();
-  }
-
-  // cops & player
-  for(const cop of police) drawCar(cop);
-  drawCar(player, true); // player draws slightly tilted
-
-  ctx.restore(); // restore camera
-}
-
-/* drawCar - a bit more polished: tilt visual for player */
-function drawCar(car, isPlayer = false){
+  // Player car
   ctx.save();
-  ctx.translate(car.x, car.y);
-  // For the player, show a visual lean dependent on driftAngle
-  let visualAngle = car.angle;
-  if(isPlayer){
-    visualAngle += car.driftAngle * 0.35; // small lean
+  ctx.translate(player.x,player.y);
+  ctx.rotate(player.angle);
+  ctx.fillStyle="#4af";
+  ctx.fillRect(-10,-20,20,40);
+  ctx.restore();
+
+  // Police cars
+  ctx.fillStyle="red";
+  for(let p of police){
+    ctx.save();
+    ctx.translate(p.x,p.y);
+    ctx.fillRect(-10,-20,20,40);
+    ctx.restore();
   }
-  ctx.rotate(visualAngle);
 
-  // body
-  ctx.fillStyle = car.color;
-  ctx.fillRect(-car.height/2, -car.width/2, car.height, car.width);
-
-  // windshield / lights
-  ctx.fillStyle = isPlayer ? '#A5F3FC' : '#FCA5A5';
-  ctx.fillRect(car.height * 0.12, -car.width * 0.36, car.height * 0.28, car.width * 0.72);
-
-  // small wheel indicators (optional)
   ctx.restore();
 }
 
-/* --------------------
-   Game Over / UI
-   -------------------- */
-function showGameOver(){
-  gameState = 'gameOver';
-  // finalize highscore
-  if(Math.floor(score) > Math.floor(highScore)){
-    highScore = Math.floor(score);
-    localStorage.setItem('highScore', String(highScore));
-  }
-  finalScoreEl.textContent = Math.floor(score);
-  bestScoreEl.textContent = Math.floor(highScore);
-  highScoreDisplay.textContent = `🏁 High: ${Math.floor(highScore)}`;
-  scoreDisplay.style.display = 'none';
-  gameOverModal.style.display = 'block';
-}
-
-/* --------------------
-   Main Loop
-   -------------------- */
-function tick(ts){
-  const dt = (ts - lastTime) / 1000;
-  lastTime = ts;
-  if(gameState === 'playing') update(dt);
+function loop(){
+  update();
   draw();
-  requestAnimationFrame(tick);
+  requestAnimationFrame(loop);
 }
 
-/* --------------------
-   Input
-   -------------------- */
-window.addEventListener('keydown', (e) => {
-  // Start the game on any key (menu)
-  if(gameState === 'menu') {
-    resetGame();
-    return;
-  }
-  if(e.key === 'ArrowLeft') input.left = true;
-  if(e.key === 'ArrowRight') input.right = true;
-});
-window.addEventListener('keyup', (e) => {
-  if(e.key === 'ArrowLeft') input.left = false;
-  if(e.key === 'ArrowRight') input.right = false;
-});
-
-// Pointer/click/touch to start & steer (useful on GitHub Pages)
-function startOrToggleFromPointer(){
-  if(gameState === 'menu') { resetGame(); return; }
-  if(gameState === 'gameOver'){ resetGame(); return; }
+function endGame(){
+  playing=false;gameOver=true;
+  if(score>highScore){highScore=score;localStorage.setItem("pp_highscore",highScore);}
+  document.getElementById("finalScore").textContent="Your Score: "+Math.floor(score);
+  document.getElementById("bestScore").textContent="Best: "+Math.floor(highScore);
+  document.getElementById("gameOver").style.display="block";
 }
-canvas.addEventListener('pointerdown', (e) => {
-  startOrToggleFromPointer();
-  // steering: left half -> left, right half -> right
-  const rect = canvas.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  if(x < rect.width/2) input.left = true; else input.right = true;
+
+function resetGame(){startGame();}
+
+document.addEventListener("keydown",e=>{
+  if(e.key==="ArrowLeft")keys.left=true;
+  if(e.key==="ArrowRight")keys.right=true;
+  if(!playing && !gameOver)startGame();
 });
-canvas.addEventListener('pointerup', (e) => { input.left = false; input.right = false; });
+document.addEventListener("keyup",e=>{
+  if(e.key==="ArrowLeft")keys.left=false;
+  if(e.key==="ArrowRight")keys.right=false;
+});
+canvas.addEventListener("touchstart",e=>{
+  const x=e.touches[0].clientX;
+  if(x<innerWidth/2)keys.left=true; else keys.right=true;
+  if(!playing && !gameOver)startGame();
+});
+canvas.addEventListener("touchend",()=>{keys.left=false;keys.right=false;});
 
-touchLeft.addEventListener('pointerdown', (e) => { startOrToggleFromPointer(); input.left = true; e.preventDefault(); });
-touchLeft.addEventListener('pointerup',   (e) => { input.left = false; e.preventDefault(); });
-touchRight.addEventListener('pointerdown',(e) => { startOrToggleFromPointer(); input.right = true; e.preventDefault(); });
-touchRight.addEventListener('pointerup',  (e) => { input.right = false; e.preventDefault(); });
-
-// Also start when message overlay clicked (desktop)
-messageOverlay.addEventListener('pointerdown', () => { startOrToggleFromPointer(); });
-
-// Restart button
-restartButton.addEventListener('click', resetGame);
-
-/* --------------------
-   Initialization
-   -------------------- */
-function initialize(){
-  resizeCanvas();
-  window.addEventListener('resize', resizeCanvas);
-  // initialize player so draw won't crash while on menu
-  player = createPlayer(2500, 2500);
-  // show stored high score
-  highScore = Number(localStorage.getItem('highScore') || 0);
-  highScoreDisplay.textContent = `🏁 High: ${Math.floor(highScore)}`;
-  // Start animation loop
-  lastTime = performance.now();
-  requestAnimationFrame(tick);
-}
-initialize();
+loop();
 </script>
 </body>
 </html>
