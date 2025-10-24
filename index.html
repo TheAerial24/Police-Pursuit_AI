@@ -7,17 +7,15 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
-/* --- CHANGED --- Sky blue background */
 html,body{width:100%;height:100%;overflow:hidden;font-family:'Inter',sans-serif;color:#1E3A8A;background-color:#60A5FA;}
-/* --- CHANGED --- Lighter blue canvas */
 #gameCanvas{display:block;background-color:#BFDBFE;position:absolute;top:0;left:0;z-index:1;}
 .ui-container{position:absolute;top:0;left:0;width:100%;height:100%;z-index:2;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;align-items:center;}
 #scoreDisplay{font-size:3rem;font-weight:900;margin-top:2rem;text-shadow:0 0 10px rgba(255,255,255,0.3);}
 #messageOverlay{font-size:1.5rem;font-weight:700;text-align:center;animation:pulse 2s infinite;}
 @keyframes pulse{0%{opacity:1;transform:scale(1);}50%{opacity:0.7;transform:scale(1.05);}100%{opacity:1;transform:scale(1);}}
 #gameOverModal{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:3;background-color:#1F2937;padding:2.5rem;border-radius:1rem;box-shadow:0 10px 30px rgba(0,0,0,0.4);text-align:center;display:none;pointer-events:auto;}
-#gameOverModal h1{font-size:2.5rem;font-weight:900;margin-bottom:0.5rem;color:white;} /* Keep game over text white */
-#gameOverModal p{font-size:1.2rem;margin-bottom:2rem;color:#D1D5DB;} /* Keep game over text light */
+#gameOverModal h1{font-size:2.5rem;font-weight:900;margin-bottom:0.5rem;color:white;}
+#gameOverModal p{font-size:1.2rem;margin-bottom:2rem;color:#D1D5DB;}
 #restartButton{font-family:'Inter',sans-serif;background:#3B82F6;color:white;border:none;padding:1rem 2rem;border-radius:0.5rem;font-size:1.2rem;font-weight:700;cursor:pointer;transition:all 0.2s ease;box-shadow:0 4px 15px rgba(59,130,246,0.3);}
 #restartButton:hover{background:#2563EB;transform:translateY(-2px);}
 .touch-zone{position:absolute;top:0;width:50%;height:100%;z-index:1;}
@@ -63,11 +61,12 @@ const MAX_COPS_ON_SCREEN=5;
 let spawnTimer=0,spawnInterval=5;
 
 const input={left:false,right:false};
-// --- CHANGED --- Renamed skidMarks to contrails, added clouds
 let player={},police=[],particles=[],contrails=[],bullets=[],clouds=[];
-// --- CHANGED --- Faster fire rate (100 -> 50)
 let lastShotTime=0,SHOT_COOLDOWN=50,BULLET_SPEED=1500,BULLET_RADIUS=5;
 let highScore=Number(localStorage.getItem('pp_highscore')||0);
+
+// --- NEW --- Minimap settings
+const MINIMAP_SCOPE = 4000; // How many world-pixels the map shows, side-to-side
 
 function resizeCanvas(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;}
 function rand(min,max){return Math.random()*(max-min)+min;}
@@ -75,10 +74,9 @@ function getDistance(x1,y1,x2,y2){return Math.hypot(x2-x1,y2-y1);}
 function wrapAngle(angle){return(angle+Math.PI)%(Math.PI*2)-Math.PI;}
 function createCar(x,y,angle,speed,turnSpeed,color,type){return{x,y,angle,speed,turnSpeed,color,type,width:CAR_WIDTH,height:CAR_HEIGHT,radius:CAR_RADIUS,velX:0,velY:0};}
 
-// --- NEW FUNCTION --- Creates clouds for the background
 function createClouds() {
-  clouds = []; // Clear old clouds
-  for (let i = 0; i < 500; i++) { // 500 clouds
+  clouds = []; 
+  for (let i = 0; i < 500; i++) {
     clouds.push({
       x: rand(0, worldBounds.width),
       y: rand(0, worldBounds.height),
@@ -90,9 +88,8 @@ function createClouds() {
 
 function resetGame(){
 player=createCar(worldBounds.width/2,worldBounds.height/2,-Math.PI/2,PLAYER_SPEED,PLAYER_TURN_SPEED,'#3B82F6','player');
-// --- CHANGED --- Clear contrails and clouds
 police=[];particles=[];contrails=[];bullets=[];clouds=[];
-createClouds(); // --- NEW --- Generate new clouds
+createClouds(); 
 score=0;gameTime=0;spawnTimer=2;spawnInterval=5;
 gameState='playing';
 gameOverModal.style.display='none';
@@ -129,14 +126,14 @@ function drawJet(ctx, entity) {
   ctx.translate(entity.x, entity.y);
   ctx.rotate(entity.angle);
   ctx.fillStyle = entity.color;
-  const w = entity.width * 1.2; // 24
-  const h = entity.height * 1.2; // 48
+  const w = entity.width * 1.2; 
+  const h = entity.height * 1.2;
   ctx.beginPath();
   ctx.moveTo(h / 2, 0); // Nose
   ctx.lineTo(-h / 2, w / 2); // Left wing tip
   ctx.lineTo(-h / 3, 0); // Center-back
   ctx.lineTo(-h / 2, -w / 2); // Right wing tip
-  ctx.closePath(); // Back to nose
+  ctx.closePath(); 
   ctx.fill();
   ctx.restore();
 }
@@ -158,7 +155,7 @@ player.velY*=0.92;
 player.x+=player.velX;
 player.y+=player.velY;
 
-// --- CHANGED --- Contrails (was Skid marks) ---
+// --- Contrails ---
 if(input.left||input.right)contrails.push({x:player.x,y:player.y,angle:player.angle,life:1});
 if(contrails.length>300)contrails.shift();
 
@@ -226,6 +223,52 @@ break;
 scoreDisplay.textContent = score;
 }
 
+// --- NEW FUNCTION --- Draws the minimap
+function drawMiniMap() {
+    const mapSize = 150; // 150x150 pixels
+    const mapMargin = 20; // 20px from edge of screen
+    const mapX = canvas.width - mapSize - mapMargin;
+    const mapY = mapMargin;
+    const scale = mapSize / MINIMAP_SCOPE; // How to scale world coords to map coords
+    
+    ctx.save();
+    ctx.translate(mapX, mapY); // Move to the map's top-left corner
+
+    // Draw background
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    ctx.strokeStyle = 'white';
+    ctx.lineWidth = 2;
+    ctx.fillRect(0, 0, mapSize, mapSize);
+    ctx.strokeRect(0, 0, mapSize, mapSize);
+
+    // Draw player (always in center)
+    ctx.fillStyle = player.color;
+    ctx.beginPath();
+    ctx.arc(mapSize / 2, mapSize / 2, 3, 0, Math.PI * 2); // 3px dot
+    ctx.fill();
+
+    // Draw police
+    ctx.fillStyle = '#EF4444'; // Cops are all red
+    for (let cop of police) {
+        // Get cop's position relative to the player
+        const relativeX = cop.x - player.x;
+        const relativeY = cop.y - player.y;
+
+        // Scale relative coords to map coords
+        const mapDotX = (relativeX * scale) + (mapSize / 2);
+        const mapDotY = (relativeY * scale) + (mapSize / 2);
+
+        // Only draw if within the map's bounds
+        if (mapDotX > 0 && mapDotX < mapSize && mapDotY > 0 && mapDotY < mapSize) {
+            ctx.beginPath();
+            ctx.arc(mapDotX, mapDotY, 2, 0, Math.PI * 2); // 2px dot
+            ctx.fill();
+        }
+    }
+    
+    ctx.restore(); // Restore context to draw rest of UI
+}
+
 // --- DRAW FUNCTION ---
 function draw(){
 ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -233,8 +276,7 @@ camera.x=player.x||0;
 camera.y=player.y||0;
 ctx.save();ctx.translate(canvas.width/2-camera.x,canvas.height/2-camera.y);
 
-// --- CHANGED --- Removed grid, added clouds
-// Draw clouds first, so they are behind everything
+// --- Draw clouds
 for (let cloud of clouds) {
     ctx.fillStyle = `rgba(255, 255, 255, ${cloud.opacity})`;
     ctx.beginPath();
@@ -242,13 +284,12 @@ for (let cloud of clouds) {
     ctx.fill();
 }
 
-// --- CHANGED --- Draw contrails (was skidMarks)
+// --- Draw contrails
 for(let s of contrails){
     s.life-=0.02;
     ctx.save();
     ctx.translate(s.x,s.y);
     ctx.rotate(s.angle);
-    // Changed from black to semi-transparent white
     ctx.fillStyle=`rgba(255,255,255,${s.life * 0.5})`; 
     ctx.fillRect(-10,-2,20,4);
     ctx.restore();
@@ -258,7 +299,13 @@ for(let p of particles){ctx.fillStyle=`rgba(255,165,0,${p.life/p.maxLife})`;ctx.
 for(let b of bullets){ctx.fillStyle='yellow';ctx.beginPath();ctx.arc(b.x,b.y,BULLET_RADIUS,0,Math.PI*2);ctx.fill();}
 drawJet(ctx, player);
 for(let cop of police){ drawJet(ctx, cop); }
-ctx.restore();
+
+// --- CHANGED --- This restore ends the camera view
+ctx.restore(); 
+
+// --- NEW --- Draw the minimap *after* restoring the camera
+// This draws it in screen-space, so it stays in the corner.
+drawMiniMap();
 }
 
 // --- MAIN LOOP ---
@@ -271,7 +318,6 @@ window.addEventListener('keydown',e=>{
 if(gameState==='menu')resetGame();
 if(e.key==='ArrowLeft')input.left=true;
 if(e.key==='ArrowRight')input.right=true;
-// --- CHANGED --- Fire rate is faster due to SHOT_COOLDOWN change
 if(e.code==='Space'){
 if(performance.now()-lastShotTime>SHOT_COOLDOWN){
 spawnBulletFromCar(player);
@@ -292,7 +338,7 @@ bullets.push({x:bx,y:by,vx:Math.cos(car.angle)*BULLET_SPEED,vy:Math.sin(car.angl
 }
 
 // --- START ---
-resizeCanvas();lastTime=performance.now();requestAnimationFrame(gameLoop);
+resizeCanvas();lastTime=performance.now();createClouds();requestAnimationFrame(gameLoop);
 </script>
 </body>
 </html>
