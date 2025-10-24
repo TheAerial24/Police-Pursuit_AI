@@ -53,6 +53,7 @@ let gameState='menu';
 let score=0,lastTime=0,gameTime=0;
 const camera={x:0,y:0};
 const PLAYER_SPEED=150,PLAYER_TURN_SPEED=3.5;
+// --- Radius is set to 8 ---
 const CAR_WIDTH=20,CAR_HEIGHT=40,CAR_RADIUS=8;
 const COP_SPEED=900, COP_TURN_SPEED=1.5;
 const MAX_COPS_ON_SCREEN=5;
@@ -65,6 +66,9 @@ let highScore=Number(localStorage.getItem('pp_highscore')||0);
 
 const MINIMAP_SCOPE = 4000;
 const COP_SPAWN_INVULNERABILITY = 2.0;
+
+// --- NEW --- Set to true to see hitboxes
+const DEBUG_MODE = true; 
 
 function resizeCanvas(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;}
 function rand(min,max){return Math.random()*(max-min)+min;}
@@ -110,14 +114,17 @@ function drawJet(ctx, entity) {
   ctx.save();
   ctx.translate(entity.x, entity.y);
   ctx.rotate(entity.angle);
-  ctx.fillStyle = entity.color;
   
+  const w = entity.width * 1.2; 
+  const h = entity.height * 1.2;
+  
+  // Set opacity for phased jets
   if (entity.type === 'police' && gameTime - entity.spawnTime < COP_SPAWN_INVULNERABILITY) {
       ctx.globalAlpha = 0.5;
   }
-
-  const w = entity.width * 1.2; 
-  const h = entity.height * 1.2;
+  
+  // Draw the jet
+  ctx.fillStyle = entity.color;
   ctx.beginPath();
   ctx.moveTo(h / 2, 0); // Nose
   ctx.lineTo(-h / 2, w / 2); // Left wing tip
@@ -125,6 +132,19 @@ function drawJet(ctx, entity) {
   ctx.lineTo(-h / 2, -w / 2); // Right wing tip
   ctx.closePath(); 
   ctx.fill();
+  
+  // --- NEW DEBUG ---
+  // Draw the hitbox
+  if (DEBUG_MODE) {
+      ctx.strokeStyle = '#00FF00'; // Bright green
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      // Draw circle at its local (0,0) with its radius
+      ctx.arc(0, 0, entity.radius, 0, Math.PI * 2);
+      ctx.stroke();
+  }
+  // --- END DEBUG ---
+
   ctx.restore();
 }
 
@@ -195,11 +215,8 @@ if (gameTime - cop.spawnTime < COP_SPAWN_INVULNERABILITY) {
 }
 
 if(getDistance(player.x,player.y,cop.x,cop.y)<player.radius+cop.radius){
-createExplosion(player.x,player.y,30);
-// --- THIS IS THE FIX ---
-// createExplosion(cop.x,cop.y,15); // Removed: Don't explode the cop
-// police.splice(i,1); // Removed: Don't destroy the cop
-showGameOver();
+    createExplosion(player.x,player.y,30);
+    showGameOver();
 }
 }
 
@@ -328,7 +345,7 @@ if(e.code==='Space')input.fire=false;
 touchLeft.addEventListener('touchstart',e=>{e.preventDefault();input.left=true;if(gameState==='menu')resetGame();},{passive:false});
 touchLeft.addEventListener('touchend',e=>{e.preventDefault();input.left=false;},{passive:false});
 touchRight.addEventListener('touchstart',e=>{e.preventDefault();input.right=true;if(gameState==='menu')resetGame();},{passive:false});
-touchRight.addEventListener('touchend',e=>{e.preventDefault();input.right=false;},{passive:false}); // Fixed a typo here from 'passive:code' to 'passive:false'
+touchRight.addEventListener('touchend',e=>{e.preventDefault();input.right=false;},{passive:false}); 
 
 // --- BULLETS ---
 function spawnBulletFromCar(car){
