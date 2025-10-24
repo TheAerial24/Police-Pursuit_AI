@@ -139,15 +139,14 @@ cop.y+=Math.sin(cop.angle)*cop.speed*deltaTime;
 spawnTimer-=deltaTime;
 if(spawnTimer<=0){spawnPolice();spawnTimer=spawnInterval;if(spawnInterval>1)spawnInterval*=0.95;}
 
-for(let i=police.length-1;i>=0;i--){
-let cop=police[i];
-if(getDistance(player.x,player.y,cop.x,cop.y)<player.radius+cop.radius){
-createExplosion(player.x,player.y,30);
-createExplosion(cop.x,cop.y,15);
-police.splice(i,1);
-showGameOver();
-}
-}
+const targetAngle = Math.atan2(player.y - cop.y, player.x - cop.x);
+let angleDiff = wrapAngle(targetAngle - cop.angle);
+const turnDirection = Math.sign(angleDiff);
+cop.angle += Math.min(Math.abs(angleDiff), cop.turnSpeed * deltaTime) * turnDirection;
+
+// Move at full speed (ignore player drift)
+cop.x += Math.cos(cop.angle) * cop.speed * deltaTime;
+cop.y += Math.sin(cop.angle) * cop.speed * deltaTime;
 
 for(let i=particles.length-1;i>=0;i--){
 let p=particles[i];p.x+=p.dx*deltaTime;p.y+=p.dy*deltaTime;p.life-=deltaTime;if(p.life<=0)particles.splice(i,1);
