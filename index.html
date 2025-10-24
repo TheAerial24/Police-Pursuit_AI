@@ -60,17 +60,18 @@ const COP_SPEED=900
 const MAX_COPS_ON_SCREEN=5;
 let spawnTimer=0,spawnInterval=5;
 
-const input={left:false,right:false};
+// --- CHANGED --- Added 'fire' state to input object
+const input={left:false,right:false,fire:false};
 let player={},police=[],particles=[],contrails=[],bullets=[],clouds=[];
-let lastShotTime=0,SHOT_COOLDOWN=50,BULLET_SPEED=1500,BULLET_RADIUS=5;
+// --- CHANGED --- Increased fire rate (cooldown 50 -> 25)
+let lastShotTime=0,SHOT_COOLDOWN=25,BULLET_SPEED=1500,BULLET_RADIUS=5;
 let highScore=Number(localStorage.getItem('pp_highscore')||0);
 
-// --- NEW --- Minimap settings
-const MINIMAP_SCOPE = 4000; // How many world-pixels the map shows, side-to-side
+const MINIMAP_SCOPE = 4000;
 
 function resizeCanvas(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;}
 function rand(min,max){return Math.random()*(max-min)+min;}
-function getDistance(x1,y1,x2,y2){return Math.hypot(x2-x1,y2-y1);}
+function getDistance(x1,y1,x2,y2){return Math.hypot(x2-x1,y2-y2);}
 function wrapAngle(angle){return(angle+Math.PI)%(Math.PI*2)-Math.PI;}
 function createCar(x,y,angle,speed,turnSpeed,color,type){return{x,y,angle,speed,turnSpeed,color,type,width:CAR_WIDTH,height:CAR_HEIGHT,radius:CAR_RADIUS,velX:0,velY:0};}
 
@@ -207,6 +208,14 @@ for(let i=particles.length-1;i>=0;i--){
 let p=particles[i];p.x+=p.dx*deltaTime;p.y+=p.dy*deltaTime;p.life-=deltaTime;if(p.life<=0)particles.splice(i,1);
 }
 
+// --- NEW --- Handle Firing (moved from keydown)
+if (input.fire) {
+    if (performance.now() - lastShotTime > SHOT_COOLDOWN) {
+        spawnBulletFromCar(player);
+        lastShotTime = performance.now();
+    }
+}
+
 // --- Bullets update ---
 for(let i=bullets.length-1;i>=0;i--){
 let b=bullets[i];
@@ -223,16 +232,15 @@ break;
 scoreDisplay.textContent = score;
 }
 
-// --- NEW FUNCTION --- Draws the minimap
 function drawMiniMap() {
-    const mapSize = 150; // 150x150 pixels
-    const mapMargin = 20; // 20px from edge of screen
+    const mapSize = 150;
+    const mapMargin = 20;
     const mapX = canvas.width - mapSize - mapMargin;
     const mapY = mapMargin;
-    const scale = mapSize / MINIMAP_SCOPE; // How to scale world coords to map coords
+    const scale = mapSize / MINIMAP_SCOPE; 
     
     ctx.save();
-    ctx.translate(mapX, mapY); // Move to the map's top-left corner
+    ctx.translate(mapX, mapY);
 
     // Draw background
     ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
@@ -244,29 +252,26 @@ function drawMiniMap() {
     // Draw player (always in center)
     ctx.fillStyle = player.color;
     ctx.beginPath();
-    ctx.arc(mapSize / 2, mapSize / 2, 3, 0, Math.PI * 2); // 3px dot
+    ctx.arc(mapSize / 2, mapSize / 2, 3, 0, Math.PI * 2); 
     ctx.fill();
 
     // Draw police
-    ctx.fillStyle = '#EF4444'; // Cops are all red
+    ctx.fillStyle = '#EF4444';
     for (let cop of police) {
-        // Get cop's position relative to the player
         const relativeX = cop.x - player.x;
         const relativeY = cop.y - player.y;
 
-        // Scale relative coords to map coords
         const mapDotX = (relativeX * scale) + (mapSize / 2);
         const mapDotY = (relativeY * scale) + (mapSize / 2);
 
-        // Only draw if within the map's bounds
         if (mapDotX > 0 && mapDotX < mapSize && mapDotY > 0 && mapDotY < mapSize) {
             ctx.beginPath();
-            ctx.arc(mapDotX, mapDotY, 2, 0, Math.PI * 2); // 2px dot
+            ctx.arc(mapDotX, mapDotY, 2, 0, Math.PI * 2); 
             ctx.fill();
         }
     }
     
-    ctx.restore(); // Restore context to draw rest of UI
+    ctx.restore(); 
 }
 
 // --- DRAW FUNCTION ---
@@ -300,11 +305,8 @@ for(let b of bullets){ctx.fillStyle='yellow';ctx.beginPath();ctx.arc(b.x,b.y,BUL
 drawJet(ctx, player);
 for(let cop of police){ drawJet(ctx, cop); }
 
-// --- CHANGED --- This restore ends the camera view
 ctx.restore(); 
 
-// --- NEW --- Draw the minimap *after* restoring the camera
-// This draws it in screen-space, so it stays in the corner.
 drawMiniMap();
 }
 
@@ -314,16 +316,22 @@ function gameLoop(timestamp){const deltaTime=(timestamp-lastTime)/1000;lastTime=
 // --- INPUT ---
 restartButton.addEventListener('click',resetGame);
 window.addEventListener('resize',resizeCanvas);
+
+// --- CHANGED --- keydown now sets a flag
 window.addEventListener('keydown',e=>{
 if(gameState==='menu')resetGame();
 if(e.key==='ArrowLeft')input.left=true;
 if(e.key==='ArrowRight')input.right=true;
-if(e.code==='Space'){
-if(performance.now()-lastShotTime>SHOT_COOLDOWN){
-spawnBulletFromCar(player);
-lastShotTime=performance.now();
-}}});
-window.addEventListener('keyup',e=>{if(e.key==='ArrowLeft')input.left=false;if(e.key==='ArrowRight')input.right=false;});
+if(e.code==='Space')input.fire=true; // Set flag to true
+});
+
+// --- CHANGED --- keyup now unsets the flag
+window.addEventListener('keyup',e=>{
+if(e.key==='ArrowLeft')input.left=false;
+if(e.key==='ArrowRight')input.right=false;
+if(e.code==='Space')input.fire=false; // Set flag to false
+});
+
 touchLeft.addEventListener('touchstart',e=>{e.preventDefault();input.left=true;if(gameState==='menu')resetGame();},{passive:false});
 touchLeft.addEventListener('touchend',e=>{e.preventDefault();input.left=false;},{passive:false});
 touchRight.addEventListener('touchstart',e=>{e.preventDefault();input.right=true;if(gameState==='menu')resetGame();},{passive:false});
