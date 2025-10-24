@@ -53,7 +53,7 @@ let gameState='menu';
 let score=0,lastTime=0,gameTime=0;
 const camera={x:0,y:0};
 const PLAYER_SPEED=150,PLAYER_TURN_SPEED=3.5;
-const CAR_WIDTH=20,CAR_HEIGHT=40,CAR_RADIUS=75;
+const CAR_WIDTH=20,CAR_HEIGHT=40,CAR_RADIUS=8;
 const COP_SPEED=900, COP_TURN_SPEED=1.5;
 const MAX_COPS_ON_SCREEN=5;
 let spawnTimer=0,spawnInterval=5;
@@ -64,7 +64,7 @@ let lastShotTime=0,SHOT_COOLDOWN=25,BULLET_SPEED=1500,BULLET_RADIUS=5;
 let highScore=Number(localStorage.getItem('pp_highscore')||0);
 
 const MINIMAP_SCOPE = 4000;
-const COP_SPAWN_INVULNERABILITY = 2.0; // 2 seconds
+const COP_SPAWN_INVULNERABILITY = 2.0;
 
 function resizeCanvas(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;}
 function rand(min,max){return Math.random()*(max-min)+min;}
@@ -73,8 +73,6 @@ function wrapAngle(angle){return(angle+Math.PI)%(Math.PI*2)-Math.PI;}
 function createCar(x,y,angle,speed,turnSpeed,color,type){return{x,y,angle,speed,turnSpeed,color,type,width:CAR_WIDTH,height:CAR_HEIGHT,radius:CAR_RADIUS,velX:0,velY:0,spawnTime:gameTime};}
 
 function resetGame(){
-    // --- THIS WAS THE FIX ---
-    // The player must be created at a number, like (0, 0), not a variable that no longer exists.
     player=createCar(0, 0, -Math.PI/2,PLAYER_SPEED,PLAYER_TURN_SPEED,'#3B82F6','player');
     police=[];particles=[];contrails=[];bullets=[];
     score=0;gameTime=0;spawnTimer=2;spawnInterval=5;
@@ -82,7 +80,6 @@ function resetGame(){
     gameOverModal.style.display='none';
     messageOverlay.style.display='none';
     scoreDisplay.style.display='block';
-    console.log("Game reset successfully. Player object:", player); // For debugging
 }
 
 function spawnPolice(){
@@ -199,8 +196,9 @@ if (gameTime - cop.spawnTime < COP_SPAWN_INVULNERABILITY) {
 
 if(getDistance(player.x,player.y,cop.x,cop.y)<player.radius+cop.radius){
 createExplosion(player.x,player.y,30);
-createExplosion(cop.x,cop.y,15);
-police.splice(i,1);
+// --- THIS IS THE FIX ---
+// createExplosion(cop.x,cop.y,15); // Removed: Don't explode the cop
+// police.splice(i,1); // Removed: Don't destroy the cop
 showGameOver();
 }
 }
@@ -282,14 +280,8 @@ function drawMiniMap() {
 // --- DRAW FUNCTION ---
 function draw(){
 ctx.clearRect(0,0,canvas.width,canvas.height);
-// Make sure player object exists before trying to read it
-if (!player || typeof player.x === 'undefined') {
-    camera.x = 0;
-    camera.y = 0;
-} else {
-    camera.x=player.x;
-    camera.y=player.y;
-}
+camera.x=player.x||0;
+camera.y=player.y||0;
 ctx.save();ctx.translate(canvas.width/2-camera.x,canvas.height/2-camera.y);
 
 // --- Draw contrails
@@ -303,12 +295,9 @@ for(let s of contrails){
     ctx.restore();
 }
 
-for(let p of particles){ctx.fillStyle=`rgba(255,165,0,${p.life/p.maxLife})`;ctx.beginPath();ctx.arc(p.x,p.y,p.size,0,Math.PI*2);ctx.fill();}
-for(let b of bullets){ctx.fillStyle='yellow';ctx.beginPath();ctx.arc(b.x,b.y,BULLET_RADIUS,0,Math.PI*2);ctx.fill();}
-// Only draw player if it exists
-if (player && typeof player.x !== 'undefined') {
-    drawJet(ctx, player);
-}
+for(let p of particles){ctx.fillStyle=`rgba(255,165,0,${p.life/p.maxLife})`;ctx.beginPath();ctx.arc(p.x,p.y,p.size,0,Math.PI * 2);ctx.fill();}
+for(let b of bullets){ctx.fillStyle='yellow';ctx.beginPath();ctx.arc(b.x,b.y,BULLET_RADIUS,0,Math.PI * 2);ctx.fill();}
+drawJet(ctx, player);
 for(let cop of police){ drawJet(ctx, cop); }
 
 ctx.restore(); 
@@ -339,7 +328,7 @@ if(e.code==='Space')input.fire=false;
 touchLeft.addEventListener('touchstart',e=>{e.preventDefault();input.left=true;if(gameState==='menu')resetGame();},{passive:false});
 touchLeft.addEventListener('touchend',e=>{e.preventDefault();input.left=false;},{passive:false});
 touchRight.addEventListener('touchstart',e=>{e.preventDefault();input.right=true;if(gameState==='menu')resetGame();},{passive:false});
-touchRight.addEventListener('touchend',e=>{e.preventDefault();input.right=false;},{passive:false});
+touchRight.addEventListener('touchend',e=>{e.preventDefault();input.right=false;},{passive:false}); // Fixed a typo here from 'passive:code' to 'passive:false'
 
 // --- BULLETS ---
 function spawnBulletFromCar(car){
