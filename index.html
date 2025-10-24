@@ -73,15 +73,16 @@ function wrapAngle(angle){return(angle+Math.PI)%(Math.PI*2)-Math.PI;}
 function createCar(x,y,angle,speed,turnSpeed,color,type){return{x,y,angle,speed,turnSpeed,color,type,width:CAR_WIDTH,height:CAR_HEIGHT,radius:CAR_RADIUS,velX:0,velY:0,spawnTime:gameTime};}
 
 function resetGame(){
-// --- THIS WAS THE FIX ---
-// Changed from worldBounds.width/2 to 0
-player=createCar(0, 0, -Math.PI/2,PLAYER_SPEED,PLAYER_TURN_SPEED,'#3B82F6','player');
-police=[];particles=[];contrails=[];bullets=[];
-score=0;gameTime=0;spawnTimer=2;spawnInterval=5;
-gameState='playing';
-gameOverModal.style.display='none';
-messageOverlay.style.display='none';
-scoreDisplay.style.display='block';
+    // --- THIS WAS THE FIX ---
+    // The player must be created at a number, like (0, 0), not a variable that no longer exists.
+    player=createCar(0, 0, -Math.PI/2,PLAYER_SPEED,PLAYER_TURN_SPEED,'#3B82F6','player');
+    police=[];particles=[];contrails=[];bullets=[];
+    score=0;gameTime=0;spawnTimer=2;spawnInterval=5;
+    gameState='playing';
+    gameOverModal.style.display='none';
+    messageOverlay.style.display='none';
+    scoreDisplay.style.display='block';
+    console.log("Game reset successfully. Player object:", player); // For debugging
 }
 
 function spawnPolice(){
@@ -281,8 +282,14 @@ function drawMiniMap() {
 // --- DRAW FUNCTION ---
 function draw(){
 ctx.clearRect(0,0,canvas.width,canvas.height);
-camera.x=player.x||0;
-camera.y=player.y||0;
+// Make sure player object exists before trying to read it
+if (!player || typeof player.x === 'undefined') {
+    camera.x = 0;
+    camera.y = 0;
+} else {
+    camera.x=player.x;
+    camera.y=player.y;
+}
 ctx.save();ctx.translate(canvas.width/2-camera.x,canvas.height/2-camera.y);
 
 // --- Draw contrails
@@ -298,7 +305,10 @@ for(let s of contrails){
 
 for(let p of particles){ctx.fillStyle=`rgba(255,165,0,${p.life/p.maxLife})`;ctx.beginPath();ctx.arc(p.x,p.y,p.size,0,Math.PI*2);ctx.fill();}
 for(let b of bullets){ctx.fillStyle='yellow';ctx.beginPath();ctx.arc(b.x,b.y,BULLET_RADIUS,0,Math.PI*2);ctx.fill();}
-drawJet(ctx, player);
+// Only draw player if it exists
+if (player && typeof player.x !== 'undefined') {
+    drawJet(ctx, player);
+}
 for(let cop of police){ drawJet(ctx, cop); }
 
 ctx.restore(); 
