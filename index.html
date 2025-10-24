@@ -54,16 +54,15 @@ let score=0,lastTime=0,gameTime=0;
 const camera={x:0,y:0};
 const worldBounds={width:5000,height:5000};
 const PLAYER_SPEED=150,PLAYER_TURN_SPEED=3.5;
-const CAR_WIDTH=20,CAR_HEIGHT=40,CAR_RADIUS=20;
+// --- CHANGED --- Radius reduced from 20 to 12 to match visuals
+const CAR_WIDTH=20,CAR_HEIGHT=40,CAR_RADIUS=12;
 const COP_SPEED=900
   ,COP_TURN_SPEED=2.0;
 const MAX_COPS_ON_SCREEN=5;
 let spawnTimer=0,spawnInterval=5;
 
-// --- CHANGED --- Added 'fire' state to input object
 const input={left:false,right:false,fire:false};
 let player={},police=[],particles=[],contrails=[],bullets=[],clouds=[];
-// --- CHANGED --- Increased fire rate (cooldown 50 -> 25)
 let lastShotTime=0,SHOT_COOLDOWN=25,BULLET_SPEED=1500,BULLET_RADIUS=5;
 let highScore=Number(localStorage.getItem('pp_highscore')||0);
 
@@ -109,7 +108,7 @@ police.push(createCar(x,y,angle,COP_SPEED,COP_TURN_SPEED,'#EF4444','police'));
 }
 
 function createExplosion(x,y,count){
-for(let i=0;i<count;i++){const angle=Math.random()*Math.PI*2;const speed=rand(50,200);const life=rand(0.5,1.5);particles.push({x,y,dx:Math.cos(angle)*speed,dy:Math.sin(angle)*speed,life,maxLife:life,size:rand(2,5)});}
+for(let i=0;iG<count;i++){const angle=Math.random()*Math.PI*2;const speed=rand(50,200);const life=rand(0.5,1.5);particles.push({x,y,dx:Math.cos(angle)*speed,dy:Math.sin(angle)*speed,life,maxLife:life,size:rand(2,5)});}
 }
 
 function showGameOver(){
@@ -195,6 +194,7 @@ for (let i = police.length - 1; i >= 0; i--) {
 // --- Collisions: player & cops ---
 for(let i=police.length-1;i>=0;i--){
 let cop=police[i];
+// --- CHANGED --- This check now uses the smaller radius
 if(getDistance(player.x,player.y,cop.x,cop.y)<player.radius+cop.radius){
 createExplosion(player.x,player.y,30);
 createExplosion(cop.x,cop.y,15);
@@ -208,7 +208,7 @@ for(let i=particles.length-1;i>=0;i--){
 let p=particles[i];p.x+=p.dx*deltaTime;p.y+=p.dy*deltaTime;p.life-=deltaTime;if(p.life<=0)particles.splice(i,1);
 }
 
-// --- NEW --- Handle Firing (moved from keydown)
+// --- Handle Firing ---
 if (input.fire) {
     if (performance.now() - lastShotTime > SHOT_COOLDOWN) {
         spawnBulletFromCar(player);
@@ -223,6 +223,7 @@ b.x+=b.vx*deltaTime;b.y+=b.vy*deltaTime;b.life-=deltaTime;
 if(b.life<=0){bullets.splice(i,1);continue;}
 for(let j=police.length-1;j>=0;j--){
 let cop=police[j];
+// --- CHANGED --- This check now uses the smaller radius
 if(getDistance(b.x,b.y,cop.x,cop.y)<BULLET_RADIUS+cop.radius){
 createExplosion(cop.x,cop.y,15);police.splice(j,1);bullets.splice(i,1);
 score += 100;
@@ -242,20 +243,17 @@ function drawMiniMap() {
     ctx.save();
     ctx.translate(mapX, mapY);
 
-    // Draw background
     ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
     ctx.strokeStyle = 'white';
     ctx.lineWidth = 2;
     ctx.fillRect(0, 0, mapSize, mapSize);
     ctx.strokeRect(0, 0, mapSize, mapSize);
 
-    // Draw player (always in center)
     ctx.fillStyle = player.color;
     ctx.beginPath();
     ctx.arc(mapSize / 2, mapSize / 2, 3, 0, Math.PI * 2); 
     ctx.fill();
 
-    // Draw police
     ctx.fillStyle = '#EF4444';
     for (let cop of police) {
         const relativeX = cop.x - player.x;
@@ -281,7 +279,6 @@ camera.x=player.x||0;
 camera.y=player.y||0;
 ctx.save();ctx.translate(canvas.width/2-camera.x,canvas.height/2-camera.y);
 
-// --- Draw clouds
 for (let cloud of clouds) {
     ctx.fillStyle = `rgba(255, 255, 255, ${cloud.opacity})`;
     ctx.beginPath();
@@ -289,7 +286,6 @@ for (let cloud of clouds) {
     ctx.fill();
 }
 
-// --- Draw contrails
 for(let s of contrails){
     s.life-=0.02;
     ctx.save();
@@ -317,19 +313,17 @@ function gameLoop(timestamp){const deltaTime=(timestamp-lastTime)/1000;lastTime=
 restartButton.addEventListener('click',resetGame);
 window.addEventListener('resize',resizeCanvas);
 
-// --- CHANGED --- keydown now sets a flag
 window.addEventListener('keydown',e=>{
 if(gameState==='menu')resetGame();
 if(e.key==='ArrowLeft')input.left=true;
 if(e.key==='ArrowRight')input.right=true;
-if(e.code==='Space')input.fire=true; // Set flag to true
+if(e.code==='Space')input.fire=true;
 });
 
-// --- CHANGED --- keyup now unsets the flag
 window.addEventListener('keyup',e=>{
 if(e.key==='ArrowLeft')input.left=false;
 if(e.key==='ArrowRight')input.right=false;
-if(e.code==='Space')input.fire=false; // Set flag to false
+if(e.code==='Space')input.fire=false;
 });
 
 touchLeft.addEventListener('touchstart',e=>{e.preventDefault();input.left=true;if(gameState==='menu')resetGame();},{passive:false});
