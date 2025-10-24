@@ -73,7 +73,8 @@ function wrapAngle(angle){return(angle+Math.PI)%(Math.PI*2)-Math.PI;}
 function createCar(x,y,angle,speed,turnSpeed,color,type){return{x,y,angle,speed,turnSpeed,color,type,width:CAR_WIDTH,height:CAR_HEIGHT,radius:CAR_RADIUS,velX:0,velY:0,spawnTime:gameTime};}
 
 function resetGame(){
-// --- THIS IS THE FIX ---
+// --- THIS WAS THE FIX ---
+// Changed from worldBounds.width/2 to 0
 player=createCar(0, 0, -Math.PI/2,PLAYER_SPEED,PLAYER_TURN_SPEED,'#3B82F6','player');
 police=[];particles=[];contrails=[];bullets=[];
 score=0;gameTime=0;spawnTimer=2;spawnInterval=5;
