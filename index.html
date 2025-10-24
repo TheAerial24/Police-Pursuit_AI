@@ -63,7 +63,7 @@ let spawnTimer=0,spawnInterval=5;
 const input={left:false,right:false};
 let player={},police=[],particles=[],skidMarks=[],bullets=[];
 let ammo=100,MAX_AMMO=100,RELOAD_COOLDOWN=10,reloadTimer=0,isReloading=false;
-let lastShotTime=0,SHOT_COOLDOWN=120,BULLET_SPEED=1200,BULLET_RADIUS=6;
+let lastShotTime=0,SHOT_COOLDOWN=100,BULLET_SPEED=1500,BULLET_RADIUS=5;
 let highScore=Number(localStorage.getItem('pp_highscore')||0);
 
 function resizeCanvas(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;}
