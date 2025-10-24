@@ -1,4 +1,4 @@
-''''''''''''<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -54,17 +54,16 @@ let score=0,lastTime=0,gameTime=0;
 const camera={x:0,y:0};
 const worldBounds={width:5000,height:5000};
 const worldGridSize=100;
-const PLAYER_SPEED=100;
-const PLAYER_TURN_SPEED=3.5;
+const PLAYER_SPEED=400,PLAYER_TURN_SPEED=3.5;
 const CAR_WIDTH=20,CAR_HEIGHT=40,CAR_RADIUS=20;
-const COP_SPEED=200,COP_TURN_SPEED=3.5;
+const COP_SPEED=450,COP_TURN_SPEED=2.0;
+const MAX_COPS_ON_SCREEN=5;
 let spawnTimer=0,spawnInterval=5;
 
 const input={left:false,right:false};
 let player={},police=[],particles=[],skidMarks=[],bullets=[];
 let ammo=100,MAX_AMMO=100,RELOAD_COOLDOWN=10,reloadTimer=0,isReloading=false;
-let lastShotTime=0,SHOT_COOLDOWN=120,BULLET_SPEED=1500,BULLET_RADIUS=6;
-const MAX_COPS_ON_SCREEN=5;
+let lastShotTime=0,SHOT_COOLDOWN=120,BULLET_SPEED=1200,BULLET_RADIUS=6;
 let highScore=Number(localStorage.getItem('pp_highscore')||0);
 
 function resizeCanvas(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;}
@@ -72,6 +71,7 @@ function rand(min,max){return Math.random()*(max-min)+min;}
 function getDistance(x1,y1,x2,y2){return Math.hypot(x2-x1,y2-y1);}
 function wrapAngle(angle){return(angle+Math.PI)%(Math.PI*2)-Math.PI;}
 function createCar(x,y,angle,speed,turnSpeed,color,type){return{x,y,angle,speed,turnSpeed,color,type,width:CAR_WIDTH,height:CAR_HEIGHT,radius:CAR_RADIUS,velX:0,velY:0};}
+
 function resetGame(){
 player=createCar(worldBounds.width/2,worldBounds.height/2,-Math.PI/2,PLAYER_SPEED,PLAYER_TURN_SPEED,'#3B82F6','player');
 police=[];particles=[];skidMarks=[];bullets=[];
@@ -106,16 +106,19 @@ bestScoreDisplay.textContent=highScore;
 gameOverModal.style.display='block';
 }
 
+// --- MAIN UPDATE FUNCTION ---
 function update(deltaTime){
 if(!deltaTime||isNaN(deltaTime))return;
 if(gameState!=='playing')return;
+
+// --- Score & Time ---
 gameTime+=deltaTime;
 score+=deltaTime;
 scoreDisplay.textContent=Math.floor(score*10);
 
+// --- Player input & drift ---
 if(input.left)player.angle-=player.turnSpeed*deltaTime;
 if(input.right)player.angle+=player.turnSpeed*deltaTime;
-
 player.velX+=Math.cos(player.angle)*player.speed*deltaTime*0.5;
 player.velY+=Math.sin(player.angle)*player.speed*deltaTime*0.5;
 player.velX*=0.92;
@@ -123,46 +126,57 @@ player.velY*=0.92;
 player.x+=player.velX;
 player.y+=player.velY;
 
+// --- Skid marks ---
 if(input.left||input.right)skidMarks.push({x:player.x,y:player.y,angle:player.angle,life:1});
 if(skidMarks.length>300)skidMarks.shift();
 
+// --- Police update ---
 for(let i=police.length-1;i>=0;i--){
 let cop=police[i];
 const targetAngle=Math.atan2(player.y-cop.y,player.x-cop.x);
 let angleDiff=wrapAngle(targetAngle-cop.angle);
 const turnDirection=Math.sign(angleDiff);
-cop.angle+=turnDirection*Math.min(Math.abs(angleDiff),cop.turnSpeed*deltaTime);
+cop.angle+=Math.min(Math.abs(angleDiff),cop.turnSpeed*deltaTime)*turnDirection;
 cop.x+=Math.cos(cop.angle)*cop.speed*deltaTime;
 cop.y+=Math.sin(cop.angle)*cop.speed*deltaTime;
 }
 
+// --- Spawn cops ---
 spawnTimer-=deltaTime;
 if(spawnTimer<=0){spawnPolice();spawnTimer=spawnInterval;if(spawnInterval>1)spawnInterval*=0.95;}
 
-const targetAngle = Math.atan2(player.y - cop.y, player.x - cop.x);
-let angleDiff = wrapAngle(targetAngle - cop.angle);
-const turnDirection = Math.sign(angleDiff);
-cop.angle += Math.min(Math.abs(angleDiff), cop.turnSpeed * deltaTime) * turnDirection;
+// --- Collisions: player & cops ---
+for(let i=police.length-1;i>=0;i--){
+let cop=police[i];
+if(getDistance(player.x,player.y,cop.x,cop.y)<player.radius+cop.radius){
+createExplosion(player.x,player.y,30);
+createExplosion(cop.x,cop.y,15);
+police.splice(i,1);
+showGameOver();
+}
+}
 
-// Move at full speed (ignore player drift)
-cop.x += Math.cos(cop.angle) * cop.speed * deltaTime;
-cop.y += Math.sin(cop.angle) * cop.speed * deltaTime;
-
+// --- Particles update ---
 for(let i=particles.length-1;i>=0;i--){
 let p=particles[i];p.x+=p.dx*deltaTime;p.y+=p.dy*deltaTime;p.life-=deltaTime;if(p.life<=0)particles.splice(i,1);
 }
 
+// --- Bullets update ---
 for(let i=bullets.length-1;i>=0;i--){
-let b=bullets[i];b.x+=b.vx*deltaTime;b.y+=b.vy*deltaTime;b.life-=deltaTime;if(b.life<=0){bullets.splice(i,1);continue;}
+let b=bullets[i];
+b.x+=b.vx*deltaTime;b.y+=b.vy*deltaTime;b.life-=deltaTime;
+if(b.life<=0){bullets.splice(i,1);continue;}
 for(let j=police.length-1;j>=0;j--){
 let cop=police[j];
 if(getDistance(b.x,b.y,cop.x,cop.y)<BULLET_RADIUS+cop.radius){
 createExplosion(cop.x,cop.y,15);police.splice(j,1);bullets.splice(i,1);break;
 }}}
 
+// --- Ammo reload ---
 if(isReloading){reloadTimer-=deltaTime;if(reloadTimer<=0){ammo=MAX_AMMO;isReloading=false;}}
 }
 
+// --- DRAW FUNCTION (unchanged) ---
 function draw(){
 ctx.clearRect(0,0,canvas.width,canvas.height);
 camera.x=player.x||0;
@@ -183,19 +197,37 @@ ctx.fillStyle='red';for(let cop of police){ctx.save();ctx.translate(cop.x,cop.y)
 ctx.restore();
 }
 
+// --- MAIN LOOP ---
 function gameLoop(timestamp){const deltaTime=(timestamp-lastTime)/1000;lastTime=timestamp;if(gameState==='playing')update(deltaTime);draw();requestAnimationFrame(gameLoop);}
 
+// --- INPUT ---
 restartButton.addEventListener('click',resetGame);
 window.addEventListener('resize',resizeCanvas);
-window.addEventListener('keydown',e=>{if(gameState==='menu')resetGame();if(e.key==='ArrowLeft')input.left=true;if(e.key==='ArrowRight')input.right=true;if(e.code==='Space'){if(!isReloading&&ammo>0&&performance.now()-lastShotTime>SHOT_COOLDOWN){spawnBulletFromCar(player);ammo--;lastShotTime=performance.now();if(ammo<=0){isReloading=true;reloadTimer=RELOAD_COOLDOWN;}}}});
+window.addEventListener('keydown',e=>{
+if(gameState==='menu')resetGame();
+if(e.key==='ArrowLeft')input.left=true;
+if(e.key==='ArrowRight')input.right=true;
+if(e.code==='Space'){
+if(!isReloading&&ammo>0&&performance.now()-lastShotTime>SHOT_COOLDOWN){
+spawnBulletFromCar(player);
+ammo--;lastShotTime=performance.now();
+if(ammo<=0){isReloading=true;reloadTimer=RELOAD_COOLDOWN;}
+}}});
 window.addEventListener('keyup',e=>{if(e.key==='ArrowLeft')input.left=false;if(e.key==='ArrowRight')input.right=false;});
 touchLeft.addEventListener('touchstart',e=>{e.preventDefault();input.left=true;if(gameState==='menu')resetGame();},{passive:false});
 touchLeft.addEventListener('touchend',e=>{e.preventDefault();input.left=false;},{passive:false});
 touchRight.addEventListener('touchstart',e=>{e.preventDefault();input.right=true;if(gameState==='menu')resetGame();},{passive:false});
 touchRight.addEventListener('touchend',e=>{e.preventDefault();input.right=false;},{passive:false});
 
-function spawnBulletFromCar(car){const noseOffset=(car.height/2)+6;const bx=car.x+Math.cos(car.angle)*noseOffset;const by=car.y+Math.sin(car.angle)*noseOffset;bullets.push({x:bx,y:by,vx:Math.cos(car.angle)*BULLET_SPEED,vy:Math.sin(car.angle)*BULLET_SPEED,life:2.5,radius:BULLET_RADIUS});}
+// --- BULLETS ---
+function spawnBulletFromCar(car){
+const noseOffset=(car.height/2)+6;
+const bx=car.x+Math.cos(car.angle)*noseOffset;
+const by=car.y+Math.sin(car.angle)*noseOffset;
+bullets.push({x:bx,y:by,vx:Math.cos(car.angle)*BULLET_SPEED,vy:Math.sin(car.angle)*BULLET_SPEED,life:2.5,radius:BULLET_RADIUS});
+}
 
+// --- START ---
 resizeCanvas();lastTime=performance.now();requestAnimationFrame(gameLoop);
 </script>
 </body>
