@@ -56,14 +56,15 @@ const worldBounds={width:5000,height:5000};
 const worldGridSize=100;
 const PLAYER_SPEED=150,PLAYER_TURN_SPEED=3.5;
 const CAR_WIDTH=20,CAR_HEIGHT=40,CAR_RADIUS=20;
-const COP_SPEED=400
-  ,COP_TURN_SPEED=2.0;
+// --- CHANGED --- Police speed is now 900 (player max speed is ~862)
+const COP_SPEED=900
+  ,COP_TURN_SPEED=2.0;
 const MAX_COPS_ON_SCREEN=5;
 let spawnTimer=0,spawnInterval=5;
 
 const input={left:false,right:false};
 let player={},police=[],particles=[],skidMarks=[],bullets=[];
-let ammo=100,MAX_AMMO=100,RELOAD_COOLDOWN=10,reloadTimer=0,isReloading=false;
+// --- CHANGED --- Removed ammo variables
 let lastShotTime=0,SHOT_COOLDOWN=100,BULLET_SPEED=1500,BULLET_RADIUS=5;
 let highScore=Number(localStorage.getItem('pp_highscore')||0);
 
@@ -76,7 +77,8 @@ function createCar(x,y,angle,speed,turnSpeed,color,type){return{x,y,angle,speed,
 function resetGame(){
 player=createCar(worldBounds.width/2,worldBounds.height/2,-Math.PI/2,PLAYER_SPEED,PLAYER_TURN_SPEED,'#3B82F6','player');
 police=[];particles=[];skidMarks=[];bullets=[];
-score=0;gameTime=0;spawnTimer=2;spawnInterval=5;ammo=MAX_AMMO;reloadTimer=0;isReloading=false;
+score=0;gameTime=0;spawnTimer=2;spawnInterval=5;
+// --- CHANGED --- Removed ammo reset
 gameState='playing';
 gameOverModal.style.display='none';
 messageOverlay.style.display='none';
@@ -101,10 +103,29 @@ function showGameOver(){
 gameState='gameOver';
 scoreDisplay.style.display='none';
 messageOverlay.style.display='none';
-finalScoreDisplay.textContent=Math.floor(score*10);
-if(score*10>highScore){highScore=Math.floor(score*10);localStorage.setItem('pp_highscore',highScore);}
+// --- CHANGED --- Score is now direct, not time-based
+finalScoreDisplay.textContent=score;
+if(score>highScore){highScore=score;localStorage.setItem('pp_highscore',highScore);}
 bestScoreDisplay.textContent=highScore;
 gameOverModal.style.display='block';
+}
+
+// --- NEW FUNCTION --- Draws a jet shape
+function drawJet(ctx, entity) {
+  ctx.save();
+  ctx.translate(entity.x, entity.y);
+  ctx.rotate(entity.angle);
+  ctx.fillStyle = entity.color;
+  const w = entity.width * 1.2; // 24
+  const h = entity.height * 1.2; // 48
+  ctx.beginPath();
+  ctx.moveTo(h / 2, 0); // Nose
+  ctx.lineTo(-h / 2, w / 2); // Left wing tip
+  ctx.lineTo(-h / 3, 0); // Center-back
+  ctx.lineTo(-h / 2, -w / 2); // Right wing tip
+  ctx.closePath(); // Back to nose
+  ctx.fill();
+  ctx.restore();
 }
 
 // --- MAIN UPDATE FUNCTION ---
@@ -112,10 +133,8 @@ function update(deltaTime){
 if(!deltaTime||isNaN(deltaTime))return;
 if(gameState!=='playing')return;
 
-// --- Score & Time ---
+// --- CHANGED --- Score is no longer time-based
 gameTime+=deltaTime;
-score+=deltaTime;
-scoreDisplay.textContent=Math.floor(score*10);
 
 // --- Player input & drift ---
 if(input.left)player.angle-=player.turnSpeed*deltaTime;
@@ -146,6 +165,23 @@ cop.y+=Math.sin(cop.angle)*cop.speed*deltaTime;
 spawnTimer-=deltaTime;
 if(spawnTimer<=0){spawnPolice();spawnTimer=spawnInterval;if(spawnInterval>1)spawnInterval*=0.95;}
 
+// --- NEW --- Collisions: cops & cops
+for (let i = police.length - 1; i >= 0; i--) {
+    for (let j = i - 1; j >= 0; j--) {
+        if (i >= police.length || j >= police.length) continue; // Check if they still exist
+        let cop1 = police[i];
+        let cop2 = police[j];
+        if (getDistance(cop1.x, cop1.y, cop2.x, cop2.y) < cop1.radius + cop2.radius) {
+            createExplosion(cop1.x, cop1.y, 15);
+            createExplosion(cop2.x, cop2.y, 15);
+            police.splice(i, 1);
+            police.splice(j, 1);
+            score += 200; // Add score for cop-on-cop collision
+            break; // Exit inner loop, continue checking for outer loop (cop i is gone)
+        }
+    }
+}
+
 // --- Collisions: player & cops ---
 for(let i=police.length-1;i>=0;i--){
 let cop=police[i];
@@ -170,14 +206,18 @@ if(b.life<=0){bullets.splice(i,1);continue;}
 for(let j=police.length-1;j>=0;j--){
 let cop=police[j];
 if(getDistance(b.x,b.y,cop.x,cop.y)<BULLET_RADIUS+cop.radius){
-createExplosion(cop.x,cop.y,15);police.splice(j,1);bullets.splice(i,1);break;
+createExplosion(cop.x,cop.y,15);police.splice(j,1);bullets.splice(i,1);
+score += 100; // --- CHANGED --- Add score for kill
+break;
 }}}
 
-// --- Ammo reload ---
-if(isReloading){reloadTimer-=deltaTime;if(reloadTimer<=0){ammo=MAX_AMMO;isReloading=false;}}
+// --- CHANGED --- Removed Ammo reload section
+
+// --- CHANGED --- Update score display at end of frame
+scoreDisplay.textContent = score;
 }
 
-// --- DRAW FUNCTION (unchanged) ---
+// --- DRAW FUNCTION ---
 function draw(){
 ctx.clearRect(0,0,canvas.width,canvas.height);
 camera.x=player.x||0;
@@ -193,8 +233,10 @@ for(let y=startY;y<=endY;y+=worldGridSize){ctx.beginPath();ctx.moveTo(startX,y);
 for(let s of skidMarks){s.life-=0.02;ctx.save();ctx.translate(s.x,s.y);ctx.rotate(s.angle);ctx.fillStyle=`rgba(0,0,0,${s.life})`;ctx.fillRect(-10,-2,20,4);ctx.restore();}
 for(let p of particles){ctx.fillStyle=`rgba(255,165,0,${p.life/p.maxLife})`;ctx.beginPath();ctx.arc(p.x,p.y,p.size,0,Math.PI*2);ctx.fill();}
 for(let b of bullets){ctx.fillStyle='yellow';ctx.beginPath();ctx.arc(b.x,b.y,BULLET_RADIUS,0,Math.PI*2);ctx.fill();}
-ctx.save();ctx.translate(player.x,player.y);ctx.rotate(player.angle);ctx.fillStyle=player.color;ctx.fillRect(-player.height/2,-player.width/2,player.height,player.width);ctx.restore();
-ctx.fillStyle='red';for(let cop of police){ctx.save();ctx.translate(cop.x,cop.y);ctx.rotate(cop.angle);ctx.fillRect(-cop.height/2,-cop.width/2,cop.height,cop.width);ctx.restore();}
+// --- CHANGED --- Use drawJet function
+drawJet(ctx, player);
+// --- CHANGED --- Use drawJet function for police
+for(let cop of police){ drawJet(ctx, cop); }
 ctx.restore();
 }
 
@@ -208,11 +250,11 @@ window.addEventListener('keydown',e=>{
 if(gameState==='menu')resetGame();
 if(e.key==='ArrowLeft')input.left=true;
 if(e.key==='ArrowRight')input.right=true;
+// --- CHANGED --- Removed all ammo checks for infinite ammo
 if(e.code==='Space'){
-if(!isReloading&&ammo>0&&performance.now()-lastShotTime>SHOT_COOLDOWN){
+if(performance.now()-lastShotTime>SHOT_COOLDOWN){
 spawnBulletFromCar(player);
-ammo--;lastShotTime=performance.now();
-if(ammo<=0){isReloading=true;reloadTimer=RELOAD_COOLDOWN;}
+lastShotTime=performance.now();
 }}});
 window.addEventListener('keyup',e=>{if(e.key==='ArrowLeft')input.left=false;if(e.key==='ArrowRight')input.right=false;});
 touchLeft.addEventListener('touchstart',e=>{e.preventDefault();input.left=true;if(gameState==='menu')resetGame();},{passive:false});
