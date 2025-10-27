@@ -1,502 +1,593 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-<title>Dogfight Destruction v1.0</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
-<style>
-  *{box-sizing:border-box;margin:0;padding:0;}
-  html,body{width:100%;height:100%;overflow:hidden;font-family:'Inter',sans-serif;background:#60A5FA;color:#0b2447;}
-  #gameCanvas{display:block;background:#bfdbfe;position:absolute;top:0;left:0;z-index:1;}
-  .ui-container{position:absolute;top:0;left:0;width:100%;height:100%;z-index:4;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;align-items:center;}
-  #scoreDisplay{font-size:2.4rem;font-weight:900;margin-top:1.5rem;text-shadow:0 0 8px rgba(255,255,255,0.3);pointer-events:auto;color:#0b2447;}
-  #messageOverlay{font-size:1.1rem;font-weight:700;text-align:center;animation:pulse 2s infinite;pointer-events:auto;color:#07203b;}
-  @keyframes pulse{0%{opacity:1;transform:scale(1);}50%{opacity:0.8;transform:scale(1.02);}100%{opacity:1;transform:scale(1);}}
-  #gameOverModal{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:6;background-color:#111827;padding:2rem;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.45);text-align:center;display:none;pointer-events:auto;color:#e6eef9;}
-  #gameOverModal h1{font-size:2rem;margin-bottom:0.5rem;}
-  #gameOverModal p{font-size:1rem;margin-bottom:1rem;color:#cbd5e1;}
-  #restartButton{font-family:'Inter',sans-serif;background:#3B82F6;color:white;border:none;padding:0.8rem 1.4rem;border-radius:8px;font-size:1rem;font-weight:800;cursor:pointer;transition:all 0.18s ease;box-shadow:0 6px 18px rgba(59,130,246,0.25);}
-  #restartButton:hover{transform:translateY(-3px); background:#2563EB;}
-  .touch-zone{position:absolute;top:0;width:50%;height:100%;z-index:3;pointer-events:auto;}
-  #touchLeft{left:0;}
-  #touchRight{right:0;}
-  .hint { position:absolute; bottom:18px; left:50%; transform:translateX(-50%); font-weight:700; pointer-events:none; color:rgba(3,37,65,0.9);}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dogfight Destruction v1.0</title>
+    
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #333;
+            color: #fff;
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+
+        canvas {
+            background-color: #000;
+            display: block;
+            margin: 0 auto;
+            cursor: pointer; 
+        }
+
+        h1, p {
+            margin: 10px 0;
+        }
+    </style>
 </head>
 <body>
-<canvas id="gameCanvas"></canvas>
+    <canvas id="gameCanvas" width="400" height="600"></canvas>
+    
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
 
-<!-- Touch zones -->
-<div class="touch-zone" id="touchLeft"></div>
-<div class="touch-zone" id="touchRight"></div>
+        let player = {
+            x: canvas.width / 2 - 25,
+            y: canvas.height - 60,
+            width: 50,
+            height: 50,
+            speed: 5,
+            dx: 0
+        };
 
-<div class="ui-container">
-  <div id="scoreDisplay">0</div>
-  <div id="messageOverlay">Tap/Press Left/Right to Steer-Spacebar to Shoot · Press any key to Start<br>Press <strong>P</strong> to Pause</div>
-</div>
+        let bullets = [];
+        let enemies = [];
+        let keys = {};
+        let score = 0;
+        let highScore = localStorage.getItem('dogfightHighScore') || 0;
+        let gameOver = false;
+        let gameStarted = false;
+        let gamePaused = false;
+        let enemySpeed = 2;
+        let enemySpawnRate = 2000; // in ms
+        let lastEnemySpawn = 0;
+        let cheatingDetected = false;
+        let lastTime = 0;
+        let frameCount = 0;
+        let fps = 0;
 
-<div id="gameOverModal">
-  <h1>Game Over</h1>
-  <p>Your final score is: <strong><span id="finalScore">0</span></strong></p>
-  <p>High Score: <strong><span id="bestScore">0</span></strong></p>
-  <button id="restartButton">Retry</button>
-</div>
+        // --- NEW ACHIEVEMENT VARIABLES ---
+        let achievements = {};
+        let totalKills = 0;
+        let distanceTravelled = 0;
+        let showingAchievements = false;
+        // --- END NEW ACHIEVEMENT VARIABLES ---
 
-<script>
-/* ============================
-   Setup + constants
-   ============================ */
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-const scoreDisplay = document.getElementById('scoreDisplay');
-const messageOverlay = document.getElementById('messageOverlay');
-const gameOverModal = document.getElementById('gameOverModal');
-const finalScoreDisplay = document.getElementById('finalScore');
-const bestScoreDisplay = document.getElementById('bestScore');
-const restartButton = document.getElementById('restartButton');
-const touchLeft = document.getElementById('touchLeft');
-const touchRight = document.getElementById('touchRight');
+        const playerImg = new Image();
+        playerImg.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAsQAAALEBGBJ04gAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAADdSURBVEiJrdW9LkMBGIDh909sYCSKaGxs/G9sBFtFEJsYJDbxL2JjGz8g3YAdhQy7C04kznlOS5KRJOfpbpLzAYvAo3bARfAJfGGKAEYtB1yARWAU2Kg2YJgVuATeAAN2gAWwBLR6DbBKYf6FNQB9AK/AXvAAXARGS1P0AKYJbJHvAWeAFaBDEdgR+AfYBNY0xYEVMI1sEfgM+KsaAy/AJjCGrAfYBN5TYBsoAbsBq8AacAJ8BXbVglsAGWAOuAK+M09sPXYvA3aBnTAN7BUP7hfsisAh8CNn5wBNAk78AfuXCQAAAABJRU5ErkJggg==';
 
-let gameState = 'menu'; // menu | playing | paused | gameOver
-let score = 0, lastTime = 0, gameTime = 0;
+        const enemyImg = new Image();
+        enemyImg.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAsQAAALEBGBJ04gAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAACVSURBVEiJ7ZYxCsAwDAS/0Puvmy4eILg46SAepKuHoIPgYFkQFDqJ/xYQBIrMv9iXhKQPjJLgCPQAbYBW0AOE/RXwAbaAWmALaAAp8EuwARSAFpACusAOUAUmOflpASeANtAD6ABtYBaQI9gBdAG6QAvg/QCzOflnAPwA7YBYwA7wA6wBSoL/gAfw03Opn/YPSvQBRu4Cy2YmAgIAAAAASUVORK5CYII=';
 
-/* === Anti-Cheat Vars (ADDED ONLY) === */
-let antiCheatTimer = 0;
-let antiCheatTriggered = false;
+        document.addEventListener('keydown', (e) => {
+            if (!gameStarted && !cheatingDetected) {
+                gameStarted = true;
+                resetGame();
+                gameLoop(0);
+            }
+            keys[e.key] = true;
 
-const camera = { x:0, y:0 };
-const PLAYER_SPEED = 120;
-const PLAYER_TURN_SPEED = 3.5;
-const JET_WIDTH = 48, JET_HEIGHT = 48, JET_RADIUS = 16;
-const ENEMY_SPEED = 120, ENEMY_TURN_SPEED = 2.1;
-const MAX_ENEMIES = 5;
-let spawnTimer = 0, spawnInterval = 4.5;
+            if (e.key === ' ' && !gameOver && !gamePaused && gameStarted) {
+                shoot();
+            }
 
-const input = { left:false, right:false, fire:false };
-let player = null, enemies = [], particles = [], contrails = [], bullets = [];
-let lastShotTime = 0, SHOT_COOLDOWN = 5 /*ms*/, BULLET_SPEED = 2400, BULLET_RADIUS = 5;
-let highScore = Number(localStorage.getItem('jet_dogfight_high') || 0);
+            if (e.key.toLowerCase() === 'p' && gameStarted && !gameOver) {
+                gamePaused = !gamePaused;
+                if (!gamePaused) {
+                    requestAnimationFrame(gameLoop);
+                }
+            }
+        });
 
-const MINIMAP_SCOPE = 4000;
-const ENEMY_SPAWN_INVULN = 1.5;
-const DEBUG = false;
+        document.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
 
-/* ============================
-   Inline SVG sprites -> data URLs
-   We'll create two SVG strings and encode them at runtime.
-   This avoids external files and makes the HTML self-contained.
-   ============================ */
+        // --- NEW CLICK HANDLER ---
+        canvas.addEventListener('click', handleCanvasClick);
 
-/* === REPLACED: cartoony F-16 top-down sprites === */
-/* Blue player F-16 (cartoony) */
-const svgPlayer = `
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-  <g transform="translate(32,32)">
-    <!-- main body -->
-    <polygon points="0,-28 8,-8 20,0 8,8 0,28 -8,8 -20,0 -8,-8" fill="#3B82F6" stroke="#1e3a8a" stroke-width="1"/>
-    <!-- inner highlight -->
-    <polygon points="0,-24 5,-8 12,0 5,8 0,24 -5,8 -12,0 -5,-8" fill="#60A5FA"/>
-    <!-- cockpit -->
-    <ellipse cx="0" cy="-8" rx="4" ry="5" fill="#93C5FD"/>
-    <!-- tail fins (small) -->
-    <polygon points="-6,12 -10,18 -6,12" fill="#1e3a8a" opacity="0.6"/>
-    <polygon points="6,12 10,18 6,12" fill="#1e3a8a" opacity="0.6"/>
-  </g>
-</svg>`;
+        function handleCanvasClick(e) {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
 
-/* Red enemy F-16 (cartoony) */
-const svgEnemy = `
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-  <g transform="translate(32,32)">
-    <polygon points="0,-28 8,-8 20,0 8,8 0,28 -8,8 -20,0 -8,-8" fill="#EF4444" stroke="#7f1d1d" stroke-width="1"/>
-    <polygon points="0,-24 5,-8 12,0 5,8 0,24 -5,8 -12,0 -5,-8" fill="#F87171"/>
-    <ellipse cx="0" cy="-8" rx="4" ry="5" fill="#FECACA"/>
-    <polygon points="-6,12 -10,18 -6,12" fill="#7f1d1d" opacity="0.6"/>
-    <polygon points="6,12 10,18 6,12" fill="#7f1d1d" opacity="0.6"/>
-  </g>
-</svg>`;
+            if (showingAchievements) {
+                // Check for "Close" button click (top right of modal)
+                if (mouseX > canvas.width - 100 - 10 && mouseX < canvas.width - 50 + 10 &&
+                    mouseY > 60 - 10 && mouseY < 90 + 5) {
+                    showingAchievements = false;
+                }
+            } else if (gameOver && !cheatingDetected) {
+                // Check for "Retry" button click
+                if (mouseX > canvas.width / 2 - 50 && mouseX < canvas.width / 2 + 50 &&
+                    mouseY > canvas.height / 2 + 60 && mouseY < canvas.height / 2 + 90) {
+                    resetGame();
+                }
+                
+                // Check for "Achievements" button click (top left)
+                if (mouseX > 10 && mouseX < 160 && mouseY > 10 && mouseY < 50) {
+                    showingAchievements = true;
+                }
+            }
+        }
+        // --- END NEW CLICK HANDLER ---
 
-/* Helper to create image object from SVG string */
-function svgToImg(svgString, onload) {
-  const img = new Image();
-  // Use encodeURIComponent to safely include svg text in URL
-  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgString);
-  img.onload = () => { if (onload) onload(img); };
-  img.onerror = () => { console.warn('Failed to load inline SVG image.'); if (onload) onload(img); };
-  return img;
-}
 
-const imgPlayerJet = svgToImg(svgPlayer);
-const imgEnemyJet  = svgToImg(svgEnemy);
+        function shoot() {
+            const bullet = {
+                x: player.x + player.width / 2 - 2.5,
+                y: player.y,
+                width: 5,
+                height: 10,
+                speed: 10
+            };
+            bullets.push(bullet);
+        }
 
-/* ============================
-   Utility helpers
-   ============================ */
-function resizeCanvas(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-function rand(min,max){ return Math.random()*(max-min)+min; }
-function getDistance(x1,y1,x2,y2){ return Math.hypot(x2 - x1, y2 - y1); } // fixed correct distance
-function wrapAngle(a){ return (a + Math.PI) % (Math.PI*2) - Math.PI; }
-function createJet(x,y,angle,speed,turnSpeed,color,type){
-  return { x,y,angle,speed,turnSpeed,color,type,width:JET_WIDTH,height:JET_HEIGHT,radius:JET_RADIUS,velX:0,velY:0,spawnTime:gameTime };
-}
+        function spawnEnemy(timestamp) {
+            if (gameOver || gamePaused) return;
 
-/* ============================
-   Game lifecycle
-   ============================ */
-function resetGame(){
-  player = createJet(0,0,-Math.PI/2,PLAYER_SPEED,PLAYER_TURN_SPEED,'#3B82F6','player');
-  enemies = []; particles = []; contrails = []; bullets = [];
-  score = 0; gameTime = 0; spawnTimer = 1.8; spawnInterval = 4.5;
-  gameState = 'playing';
-  gameOverModal.style.display = 'none';
-  messageOverlay.style.display = 'none';
-  scoreDisplay.style.display = 'block';
-  // reset anti-cheat tracking (ADDED)
-  antiCheatTimer = 0;
-  antiCheatTriggered = false;
-}
+            if (timestamp - lastEnemySpawn > enemySpawnRate) {
+                const size = 30;
+                const x = Math.random() * (canvas.width - size);
+                const y = -size;
+                enemies.push({ x, y, width: size, height: size });
+                lastEnemySpawn = timestamp;
 
-function spawnEnemy(){
-  if (enemies.length >= MAX_ENEMIES) return;
-  const spawnAngle = Math.random()*Math.PI*2;
-  const spawnDist = Math.max(canvas.width, canvas.height)*0.8;
-  const x = player.x + Math.cos(spawnAngle)*spawnDist;
-  const y = player.y + Math.sin(spawnAngle)*spawnDist;
-  const angle = Math.atan2(player.y - y, player.x - x);
-  enemies.push(createJet(x,y,angle,ENEMY_SPEED,ENEMY_TURN_SPEED,'#EF4444','enemy'));
-}
+                // Increase difficulty
+                enemySpeed += 0.05;
+                if (enemySpawnRate > 500) {
+                    enemySpawnRate -= 10;
+                }
+            }
+        }
 
-function createExplosion(x,y,count){
-  for(let i=0;i<count;i++){
-    const angle = Math.random()*Math.PI*2;
-    const speed = rand(40,220);
-    const life = rand(0.6,1.6);
-    particles.push({ x,y,dx:Math.cos(angle)*speed,dy:Math.sin(angle)*speed,life,maxLife:life,size:rand(2,5) });
-  }
-}
+        function detectCollision(a, b) {
+            return a.x < b.x + b.width &&
+                   a.x + a.width > b.x &&
+                   a.y < b.y + b.height &&
+                   a.y + a.height > b.y;
+        }
 
-function showGameOver(){
-  gameState = 'gameOver';
-  scoreDisplay.style.display = 'none';
-  messageOverlay.style.display = 'none';
-  finalScoreDisplay.textContent = score;
-  if (score > highScore){ highScore = score; localStorage.setItem('jet_dogfight_high', highScore); }
-  bestScoreDisplay.textContent = highScore;
-  gameOverModal.style.display = 'block';
-  gameOverModal.querySelector('h1').textContent = 'Game Over';
-}
+        function resetGame() {
+            player.x = canvas.width / 2 - 25;
+            player.y = canvas.height - 60;
+            bullets = [];
+            enemies = [];
+            score = 0;
+            gameOver = false;
+            gameStarted = true;
+            gamePaused = false;
+            enemySpeed = 2;
+            enemySpawnRate = 2000;
+            lastEnemySpawn = 0;
+            // --- NEW ACHIEVEMENT RESETS ---
+            totalKills = 0;
+            distanceTravelled = 0;
+            showingAchievements = false;
+            // --- END NEW ACHIEVEMENT RESETS ---
+        }
 
-/* ============================
-   Anti-Cheat: Special end screen (ADDED)
-   This end screen is identical to the normal gameOver modal
-   except the header reads "Anti Cheat Is: Active" and the button text is changed.
-   ============================ */
-function showAntiCheat(){
-  gameState = 'gameOver';
-  scoreDisplay.style.display = 'none';
-  messageOverlay.style.display = 'none';
-  finalScoreDisplay.textContent = score;
-  if (score > highScore){ highScore = score; localStorage.setItem('jet_dogfight_high', highScore); }
-  bestScoreDisplay.textContent = highScore;
-  gameOverModal.style.display = 'block';
-  // change the header text to indicate anti-cheat
-  gameOverModal.querySelector('h1').textContent = 'Anti Cheat Is: Active';
-  // place restart button above (we already have a restart button; change its text)
-  restartButton.textContent = 'Restart Game';
-}
+        function detectCheating() {
+            if (score > 50000 && enemySpeed < 3) {
+                cheatingDetected = true;
+                gameOver = true;
+                gameStarted = false;
+                // --- NEW ---
+                unlockAchievement('cheater');
+            }
+        }
 
-/* ============================
-   Drawing jets using images
-   ============================ */
-function drawJet(ctx, ent){
-  ctx.save();
-  ctx.translate(ent.x, ent.y);
-  ctx.rotate(ent.angle);
-  // pick appropriate image
-  const img = ent.type === 'player' ? imgPlayerJet : imgEnemyJet;
-  const w = ent.width;
-  const h = ent.height;
-  // if image hasn't loaded yet, draw fallback (triangle)
-  if (img && img.complete && img.width){
-    ctx.drawImage(img, -w/2, -h/2, w, h);
-  } else {
-    // fallback triangular jet
-    ctx.fillStyle = ent.color;
-    ctx.beginPath();
-    ctx.moveTo(h/2,0);
-    ctx.lineTo(-h/2, w/2);
-    ctx.lineTo(-h/3,0);
-    ctx.lineTo(-h/2, -w/2);
-    ctx.closePath();
-    ctx.fill();
-  }
-  if (ent.type === 'enemy' && gameTime - ent.spawnTime < ENEMY_SPAWN_INVULN) {
-    ctx.globalAlpha = 0.6;
-  }
-  if (DEBUG){
-    ctx.strokeStyle = '#00ff00';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(0,0,ent.radius,0,Math.PI*2);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
+        function drawAntiCheatScreen() {
+            ctx.fillStyle = '#f00';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#fff';
+            ctx.font = '30px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Cheating Detected!', canvas.width / 2, canvas.height / 2 - 40);
+            ctx.font = '20px Arial';
+            ctx.fillText('Nice try, buddy.', canvas.width / 2, canvas.height / 2);
+            ctx.fillText(`Final Score: ${score}`, canvas.width / 2, canvas.height / 2 + 40);
+            
+            // --- NEW ---
+            // Trigger "No More" check just in case this was the last one
+            checkAllAchievements(); 
+        }
 
-/* ============================
-   Update loop
-   ============================ */
-function update(dt){
-  if (!dt || isNaN(dt)) return;
-  if (gameState !== 'playing') return;
-  gameTime += dt;
+        function drawStartScreen() {
+            ctx.fillStyle = '#fff';
+            ctx.font = '20px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Tap/Press Left/Right to Steer', canvas.width / 2, canvas.height / 2 - 20);
+            ctx.fillText('Spacebar to Shoot', canvas.width / 2, canvas.height / 2 + 10);
+            ctx.font = '24px Arial';
+            ctx.fillText('Press any key to Start', canvas.width / 2, canvas.height / 2 + 60);
+            
+            ctx.font = '16px Arial';
+            ctx.fillText('Press P to Pause', canvas.width / 2, canvas.height - 30);
+        }
 
-  // === Anti-cheat: Holding fire + left/right continuously for 5 seconds ===
-  // Only added code here — detection for sustained space + turn
-  if (input.fire && (input.left || input.right)) {
-    antiCheatTimer += dt;
-    if (antiCheatTimer >= 5 && !antiCheatTriggered) {
-      antiCheatTriggered = true;
-      createExplosion(player.x, player.y, 30);
-      showAntiCheat();
-      return; // stop further updates after anti-cheat triggers
-    }
-  } else {
-    // reset timer when condition not met
-    antiCheatTimer = 0;
-  }
+        function drawGameOver() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // player steering & drift
-  if (input.left) player.angle -= player.turnSpeed * dt;
-  if (input.right) player.angle += player.turnSpeed * dt;
-  player.velX += Math.cos(player.angle) * player.speed * dt * 0.55;
-  player.velY += Math.sin(player.angle) * player.speed * dt * 0.55;
-  player.velX *= 0.92;
-  player.velY *= 0.92;
-  player.x += player.velX;
-  player.y += player.velY;
+            ctx.fillStyle = '#fff';
+            ctx.font = '40px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Game Over', canvas.width / 2, canvas.height / 2 - 40);
 
-  // contrails
-  contrails.push({ x:player.x, y:player.y, angle:player.angle, life:1 });
-  if (contrails.length > 360) contrails.shift();
+            ctx.font = '24px Arial';
+            ctx.fillText(`Your final score is: ${score}`, canvas.width / 2, canvas.height / 2 + 10);
+            ctx.fillText(`High Score: ${highScore}`, canvas.width / 2, canvas.height / 2 + 40);
 
-  // enemies AI
-  for (let i=enemies.length-1;i>=0;i--){
-    let e = enemies[i];
-    const targ = Math.atan2(player.y - e.y, player.x - e.x);
-    let diff = wrapAngle(targ - e.angle);
-    const dir = Math.sign(diff);
-    e.angle += Math.min(Math.abs(diff), e.turnSpeed * dt) * dir;
-    e.x += Math.cos(e.angle) * e.speed * dt;
-    e.y += Math.sin(e.angle) * e.speed * dt;
-  }
+            // Draw Retry Button
+            ctx.fillStyle = '#4CAF50';
+            ctx.fillRect(canvas.width / 2 - 50, canvas.height / 2 + 60, 100, 30);
+            ctx.fillStyle = '#fff';
+            ctx.font = '20px Arial';
+            ctx.fillText('Retry', canvas.width / 2, canvas.height / 2 + 82);
+            
+            // --- NEW ACHIEVEMENT BUTTON ---
+            ctx.fillStyle = '#007BFF';
+            ctx.fillRect(10, 10, 150, 40);
+            ctx.fillStyle = '#fff';
+            ctx.font = '18px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText('Achievements', 20, 37);
+            ctx.textAlign = 'center'; // Reset alignment
+            // --- END NEW ACHIEVEMENT BUTTON ---
+        }
 
-  // spawn enemies
-  spawnTimer -= dt;
-  if (spawnTimer <= 0){
-    spawnEnemy();
-    spawnTimer = spawnInterval;
-    if (spawnInterval > 1.2) spawnInterval *= 0.97;
-  }
+        function drawPauseScreen() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#fff';
+            ctx.font = '40px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Paused', canvas.width / 2, canvas.height / 2);
+        }
 
-  // collisions: enemy vs enemy (avoid immediate collisions when recent spawn)
-  for (let i = enemies.length - 1; i >= 0; i--){
-    for (let j = i-1; j >= 0; j--){
-      if (i >= enemies.length || j >= enemies.length) continue;
-      let a = enemies[i], b = enemies[j];
-      if (gameTime - a.spawnTime < ENEMY_SPAWN_INVULN || gameTime - b.spawnTime < ENEMY_SPAWN_INVULN) continue;
-      if (getDistance(a.x,a.y,b.x,b.y) < a.radius + b.radius){
-        createExplosion(a.x,a.y,12);
-        createExplosion(b.x,b.y,12);
-        enemies.splice(i,1);
-        enemies.splice(j,1);
-        score += 200;
-        break;
-      }
-    }
-  }
+        function drawScore() {
+            ctx.fillStyle = '#fff';
+            ctx.font = '20px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText(`Score: ${score}`, 10, 20);
+            ctx.fillText(`High Score: ${highScore}`, 10, 45);
+        }
 
-  // collisions: player vs enemy
-  for (let i = enemies.length -1; i>=0; i--){
-    const e = enemies[i];
-    if (gameTime - e.spawnTime < ENEMY_SPAWN_INVULN) continue;
-    if (getDistance(player.x,player.y,e.x,e.y) < player.radius + e.radius){
-      createExplosion(player.x,player.y,28);
-      showGameOver();
-      return;
-    }
-  }
+        function drawFPS() {
+            ctx.fillStyle = '#fff';
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'right';
+            ctx.fillText(`FPS: ${fps}`, canvas.width - 10, 20);
+        }
 
-  // particles update
-  for (let i = particles.length-1; i>=0; i--){
-    let p = particles[i];
-    p.x += p.dx * dt; p.y += p.dy * dt; p.life -= dt;
-    if (p.life <= 0) particles.splice(i,1);
-  }
+        function update(timestamp) {
+            if (gameOver) {
+                if (score > highScore) {
+                    highScore = score;
+                    localStorage.setItem('dogfightHighScore', highScore);
+                }
+                
+                // --- NEW ACHIEVEMENT CHECKS ON GAME OVER ---
+                if (score > 10000) {
+                    unlockAchievement('highScore');
+                }
+                // Check if this game over completed all achievements
+                checkAllAchievements();
+                // --- END NEW ACHIEVEMENT CHECKS ---
+                return;
+            }
 
-  // firing
-  if (input.fire){
-    if (performance.now() - lastShotTime > SHOT_COOLDOWN){
-      spawnBulletFromJet(player);
-      lastShotTime = performance.now();
-    }
-  }
+            if (gamePaused) {
+                return;
+            }
 
-  // bullets update + collisions vs enemies
-  for (let i = bullets.length-1; i>=0; i--){
-    let b = bullets[i];
-    b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
-    if (b.life <= 0){ bullets.splice(i,1); continue; }
-    for (let j = enemies.length-1; j>=0; j--){
-      let e = enemies[j];
-      if (getDistance(b.x,b.y,e.x,e.y) < BULLET_RADIUS + e.radius){
-        createExplosion(e.x,e.y,14);
-        enemies.splice(j,1);
-        bullets.splice(i,1);
-        score += 100;
-        break;
-      }
-    }
-  }
+            if (!gameStarted) {
+                return;
+            }
+            
+            // --- NEW ---
+            detectCheating();
+            if (cheatingDetected) {
+                return;
+            }
 
-  scoreDisplay.textContent = score;
-}
+            // Player movement
+            player.dx = 0;
+            if (keys['ArrowLeft'] || keys['a']) {
+                player.dx = -player.speed;
+            }
+            if (keys['ArrowRight'] || keys['d']) {
+                player.dx = player.speed;
+            }
+            player.x += player.dx;
 
-/* ============================
-   Mini map
-   ============================ */
-function drawMiniMap(){
-  const mapSize = 140; const mapMargin = 16;
-  const mapX = canvas.width - mapSize - mapMargin; const mapY = mapMargin;
-  const scale = mapSize / MINIMAP_SCOPE;
-  ctx.save(); ctx.translate(mapX,mapY);
-  ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.fillRect(0,0,mapSize,mapSize);
-  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.6; ctx.strokeRect(0,0,mapSize,mapSize);
-  // player dot center
-  ctx.globalAlpha = 1.0;
-  ctx.fillStyle = player.color; ctx.beginPath(); ctx.arc(mapSize/2, mapSize/2, 3, 0, Math.PI*2); ctx.fill();
-  for (let e of enemies){
-    const rx = e.x - player.x, ry = e.y - player.y;
-    const dx = (rx * scale) + (mapSize/2), dy = (ry * scale) + (mapSize/2);
-    ctx.globalAlpha = (gameTime - e.spawnTime < ENEMY_SPAWN_INVULN) ? 0.5 : 1.0;
-    if (dx > 0 && dx < mapSize && dy > 0 && dy < mapSize){
-      ctx.fillStyle = '#EF4444'; ctx.beginPath(); ctx.arc(dx,dy,2,0,Math.PI*2); ctx.fill();
-    }
-  }
-  ctx.globalAlpha = 1.0; ctx.restore();
-}
+            // Keep player in bounds
+            if (player.x < 0) player.x = 0;
+            if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
 
-/* ============================
-   Draw everything
-   ============================ */
-function draw(){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
+            // --- NEW: Track distance ---
+            distanceTravelled += enemySpeed;
+            if (distanceTravelled >= 5000) {
+                unlockAchievement('traveller');
+            }
+            // --- END NEW ---
 
-  camera.x = (player && player.x !== undefined) ? player.x : 0;
-  camera.y = (player && player.y !== undefined) ? player.y : 0;
+            // Update bullets
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                bullets[i].y -= bullets[i].speed;
+                if (bullets[i].y < 0) {
+                    bullets.splice(i, 1);
+                }
+            }
 
-  ctx.save();
-  ctx.translate(canvas.width/2 - camera.x, canvas.height/2 - camera.y);
+            // Update enemies
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                enemies[i].y += enemySpeed;
+                if (enemies[i].y > canvas.height) {
+                    enemies.splice(i, 1);
+                }
+            }
 
-  // contrails
-  for (let s of contrails){
-    s.life -= 0.02;
-    ctx.save();
-    ctx.translate(s.x, s.y); ctx.rotate(s.angle);
-    ctx.fillStyle = `rgba(255,255,255,${Math.max(0, s.life * 0.45)})`;
-    ctx.fillRect(-12, -2.5, 24, 5);
-    ctx.restore();
-  }
+            // Collision detection: Bullets and Enemies
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    if (detectCollision(bullets[i], enemies[j])) {
+                        bullets.splice(i, 1);
+                        enemies.splice(j, 1);
+                        score += 100;
+                        
+                        // --- NEW ACHIEVEMENT CHECKS ---
+                        totalKills++;
+                        unlockAchievement('firstBlood');
+                        if (totalKills >= 50) {
+                            unlockAchievement('50kills');
+                        }
+                        // --- END NEW ---
+                        break; 
+                    }
+                }
+            }
+            
+            // --- NEW: Collision detection: Enemy and Enemy ---
+            for (let i = 0; i < enemies.length; i++) {
+                for (let j = i + 1; j < enemies.length; j++) {
+                    if (detectCollision(enemies[i], enemies[j])) {
+                        // Remove both enemies
+                        enemies.splice(j, 1); // Remove j first (higher index)
+                        enemies.splice(i, 1);
 
-  // particles
-  for (let p of particles){
-    ctx.fillStyle = `rgba(255,165,0,${Math.max(0, p.life/p.maxLife)})`;
-    ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
-  }
+                        // --- NEW ACHIEVEMENT CHECKS ---
+                        unlockAchievement('evasion');
+                        
+                        totalKills += 2; // Both are "killed"
+                        unlockAchievement('firstBlood'); // Counts as first blood
+                        if (totalKills >= 50) {
+                            unlockAchievement('50kills');
+                        }
+                        // --- END NEW ---
+                        
+                        i--; // Adjust outer loop index
+                        break; // Exit inner loop
+                    }
+                }
+            }
+            // --- END NEW ---
 
-  // bullets
-  for (let b of bullets){
-    ctx.fillStyle = '#ffeb3b'; ctx.beginPath(); ctx.arc(b.x,b.y,BULLET_RADIUS,0,Math.PI*2); ctx.fill();
-  }
 
-  // draw jets
-  if (player && player.x !== undefined) drawJet(ctx, player);
-  for (let e of enemies) drawJet(ctx, e);
+            // Collision detection: Player and Enemies
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                if (detectCollision(player, enemies[i])) {
+                    gameOver = true;
+                    break;
+                }
+            }
 
-  ctx.restore();
+            spawnEnemy(timestamp);
+        }
 
-  if (player && player.x !== undefined) drawMiniMap();
-}
+        function draw() {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-/* ============================
-   Input handlers & spawn bullets
-   ============================ */
-restartButton.addEventListener('click', resetGame);
-window.addEventListener('resize', resizeCanvas);
+            if (cheatingDetected) {
+                drawAntiCheatScreen();
+                return;
+            }
 
-window.addEventListener('keydown', e => {
-  // start from menu
-  if (gameState === 'menu'){
-    resetGame(); return;
-  }
+            // Draw player
+            ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
 
-  // Pause/unpause on 'p' or 'P'
-  if ((e.key === 'p' || e.key === 'P')) {
-    if (gameState === 'playing') {
-      gameState = 'paused';
-      messageOverlay.textContent = 'PAUSED · Press P to Resume';
-      messageOverlay.style.display = 'block';
-    } else if (gameState === 'paused') {
-      gameState = 'playing';
-      messageOverlay.style.display = 'none';
-    }
-    // don't block other keys handling
-  }
+            // Draw bullets
+            ctx.fillStyle = '#f00';
+            bullets.forEach(bullet => {
+                ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+            });
 
-  if (e.key === 'ArrowLeft') input.left = true;
-  if (e.key === 'ArrowRight') input.right = true;
-  if (e.code === 'Space') input.fire = true;
-});
+            // Draw enemies
+            enemies.forEach(enemy => {
+                ctx.drawImage(enemyImg, enemy.x, enemy.y, enemy.width, enemy.height);
+            });
 
-window.addEventListener('keyup', e => {
-  if (e.key === 'ArrowLeft') input.left = false;
-  if (e.key === 'ArrowRight') input.right = false;
-  if (e.code === 'Space') input.fire = false;
-});
+            if (!gameStarted) {
+                drawStartScreen();
+            } else if (gameOver) {
+                drawGameOver();
+            } else if (gamePaused) {
+                drawPauseScreen();
+            } else {
+                drawScore();
+                drawFPS();
+            }
+            
+            // --- NEW: Draw achievement modal ---
+            if (showingAchievements) {
+                drawAchievements();
+            }
+            // --- END NEW ---
+        }
 
-touchLeft.addEventListener('touchstart', e => { e.preventDefault(); input.left = true; if (gameState === 'menu') resetGame(); }, { passive:false });
-touchLeft.addEventListener('touchend',   e => { e.preventDefault(); input.left = false; }, { passive:false });
-touchRight.addEventListener('touchstart', e => { e.preventDefault(); input.right = true; if (gameState === 'menu') resetGame(); }, { passive:false });
-touchRight.addEventListener('touchend',   e => { e.preventDefault(); input.right = false; }, { passive:false });
+        function gameLoop(timestamp) {
+            let deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+            frameCount++;
+            if (timestamp % 1000 < deltaTime) {
+                fps = frameCount;
+                frameCount = 0;
+            }
 
-function spawnBulletFromJet(jet){
-  const nose = (jet.height/2) + 6;
-  const bx = jet.x + Math.cos(jet.angle) * nose;
-  const by = jet.y + Math.sin(jet.angle) * nose;
-  bullets.push({ x:bx, y:by, vx:Math.cos(jet.angle)*BULLET_SPEED, vy:Math.sin(jet.angle)*BULLET_SPEED, life:2.2 });
-}
+            update(timestamp);
+            draw();
 
-/* expose a simple alias used earlier */
-function spawnBulletFromCar(car){ spawnBulletFromJet(car); }
+            if (!gameOver && !gamePaused) {
+                requestAnimationFrame(gameLoop);
+            } else if (gameOver && cheatingDetected) {
+                // Stop loop if cheating is detected
+                return;
+            }
+        }
 
-/* ============================
-   Main loop start
-   ============================ */
-resizeCanvas();
-lastTime = performance.now();
-requestAnimationFrame(function loop(t){
-  const dt = (t - lastTime) / 1000;
-  lastTime = t;
-  if (gameState === 'playing') update(dt);
-  draw();
-  requestAnimationFrame(loop);
-});
+        // --- NEW ACHIEVEMENT FUNCTIONS ---
 
-/* Set initial UI values */
-scoreDisplay.textContent = score;
-bestScoreDisplay.textContent = highScore;
-messageOverlay.style.display = 'block';
-</script>
+        function initializeAchievements() {
+            const defaultAchievements = {
+                'firstBlood': { name: 'First Blood', description: 'Destroy your first enemy.', unlocked: false },
+                'evasion': { name: 'Evasion', description: 'Have 2 enemies collide with one another.', unlocked: false },
+                'traveller': { name: 'Traveller', description: 'Travel 5000 pixels.', unlocked: false },
+                '50kills': { name: '50 Kills', description: 'Get 50 total kills.', unlocked: false },
+                'cheater': { name: 'Cheater', description: 'Get caught by the anticheat.', unlocked: false },
+                'highScore': { name: 'High Score', description: 'Get a score over 10000.', unlocked: false },
+                'noMore': { name: 'No More', description: 'Unlock all other achievements.', unlocked: false }
+            };
+            
+            achievements = defaultAchievements;
+        }
+
+        function loadAchievements() {
+            const saved = localStorage.getItem('dogfightAchievements');
+            if (saved) {
+                achievements = JSON.parse(saved);
+                // This ensures if we add new achievements later, they get added
+                initializeAchievements(); 
+                let savedObj = JSON.parse(saved);
+                for (let key in achievements) {
+                    if (savedObj[key]) {
+                        achievements[key].unlocked = savedObj[key].unlocked;
+                    }
+                }
+            } else {
+                initializeAchievements();
+            }
+        }
+
+        function saveAchievements() {
+            localStorage.setItem('dogfightAchievements', JSON.stringify(achievements));
+        }
+
+        function unlockAchievement(id) {
+            if (achievements[id] && !achievements[id].unlocked) {
+                achievements[id].unlocked = true;
+                
+                // Special check for 'noMore'
+                if (id !== 'noMore') {
+                    checkAllAchievements(); // Check if this unlock triggered 'noMore'
+                }
+                
+                saveAchievements();
+            }
+        }
+
+        function checkAllAchievements() {
+            // Don't check if 'noMore' is already unlocked
+            if (achievements.noMore.unlocked) return;
+
+            let allOthersUnlocked = true;
+            for (const key in achievements) {
+                if (key !== 'noMore' && !achievements[key].unlocked) {
+                    allOthersUnlocked = false;
+                    break;
+                }
+            }
+
+            if (allOthersUnlocked) {
+                // Manually unlock 'noMore' to avoid recursion
+                achievements.noMore.unlocked = true;
+            }
+        }
+
+        function drawAchievements() {
+            // Background overlay
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Modal box
+            ctx.fillStyle = '#222';
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.fillRect(50, 50, canvas.width - 100, canvas.height - 100);
+            ctx.strokeRect(50, 50, canvas.width - 100, canvas.height - 100);
+
+            // Title
+            ctx.fillStyle = '#fff';
+            ctx.font = '28px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Achievements', canvas.width / 2, 90);
+
+            // Close button
+            ctx.fillStyle = '#ccc';
+            ctx.fillRect(canvas.width - 100, 60, 40, 30);
+            ctx.fillStyle = '#000';
+            ctx.font = '20px Arial';
+            ctx.fillText('X', canvas.width - 80, 82);
+
+            // List achievements
+            let yPos = 140;
+            for (const key in achievements) {
+                const ach = achievements[key];
+                
+                if (ach.unlocked) {
+                    ctx.fillStyle = '#4CAF50'; // Green for unlocked
+                } else {
+                    ctx.fillStyle = '#777'; // Grey for locked
+                }
+                
+                ctx.textAlign = 'left';
+                ctx.font = '20px Arial';
+                ctx.fillText(ach.name, 70, yPos);
+                
+                if (ach.unlocked) {
+                    ctx.fillStyle = '#ccc';
+                } else {
+                    ctx.fillStyle = '#555';
+                }
+                ctx.font = '14px Arial';
+                ctx.fillText(ach.description, 70, yPos + 20);
+                
+                yPos += 60;
+            }
+            ctx.textAlign = 'center'; // Reset alignment
+        }
+
+        // --- END NEW ACHIEVEMENT FUNCTIONS ---
+
+
+        // Initial call to start the screen
+        loadAchievements(); // --- NEW ---
+        draw();
+    </script>
 </body>
 </html>
