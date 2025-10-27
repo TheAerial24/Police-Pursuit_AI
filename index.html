@@ -62,16 +62,18 @@ let gameState = 'menu'; // menu | playing | paused | gameOver
 let score = 0, lastTime = 0, gameTime = 0;
 const camera = { x:0, y:0 };
 
-const PLAYER_SPEED = 150;
+/* ====== CHANGED: PLAYER + ENEMY SPEEDS ====== */
+const PLAYER_SPEED = 120;
 const PLAYER_TURN_SPEED = 3.5;
 const JET_WIDTH = 48, JET_HEIGHT = 48, JET_RADIUS = 16;
-const ENEMY_SPEED = 250, ENEMY_TURN_SPEED = 2.1;
+/* ENEMY_SPEED changed to match player speed */
+const ENEMY_SPEED = 120, ENEMY_TURN_SPEED = 2.1;
 const MAX_ENEMIES = 5;
 let spawnTimer = 0, spawnInterval = 4.5;
 
 const input = { left:false, right:false, fire:false };
 let player = null, enemies = [], particles = [], contrails = [], bullets = [];
-let lastShotTime = 0, SHOT_COOLDOWN = 250 /*ms*/, BULLET_SPEED = 1000, BULLET_RADIUS = 5;
+let lastShotTime = 0, SHOT_COOLDOWN = 250 /*ms*/, BULLET_SPEED = 2400, BULLET_RADIUS = 5;
 let highScore = Number(localStorage.getItem('jet_dogfight_high') || 0);
 
 const MINIMAP_SCOPE = 4000;
@@ -84,38 +86,32 @@ const DEBUG = false;
    This avoids external files and makes the HTML self-contained.
    ============================ */
 
-/* Simple cartoony top-down jet SVG template.
-   Player = blue, Enemy = red. Both have transparent background.
-   The design is intentionally simple for clarity at small sizes. */
+/* === REPLACED: cartoony F-16 top-down sprites === */
+/* Blue player F-16 (cartoony) */
 const svgPlayer = `
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
   <g transform="translate(32,32)">
-    <!-- fuselage -->
-    <ellipse rx="6" ry="18" fill="#3B82F6"/>
-    <!-- nose -->
-    <polygon points="18,0 6,-8 6,8" fill="#2563EB"/>
-    <!-- wings -->
-    <path d="M-6,6 L-20,14 L-16,6 L-24,2 L-10,0 Z" fill="#60A5FA" transform="rotate(0)"/>
-    <path d="M-6,-6 L-20,-14 L-16,-6 L-24,-2 L-10,0 Z" fill="#60A5FA" transform="rotate(0)"/>
-    <!-- tail -->
-    <rect x="-8" y="-3" width="6" height="6" rx="1" ry="1" fill="#1e40af" transform="translate(-16,0)"/>
+    <!-- main body -->
+    <polygon points="0,-28 8,-8 20,0 8,8 0,28 -8,8 -20,0 -8,-8" fill="#3B82F6" stroke="#1e3a8a" stroke-width="1"/>
+    <!-- inner highlight -->
+    <polygon points="0,-24 5,-8 12,0 5,8 0,24 -5,8 -12,0 -5,-8" fill="#60A5FA"/>
     <!-- cockpit -->
-    <ellipse cx="2" cy="0" rx="3" ry="4" fill="#bae6fd"/>
-    <!-- subtle outline -->
-    <path d="M18,0 L6,-8 L6,8 Z" fill="none" stroke="#0b2447" stroke-width="0.6" stroke-linejoin="round"/>
+    <ellipse cx="0" cy="-8" rx="4" ry="5" fill="#93C5FD"/>
+    <!-- tail fins (small) -->
+    <polygon points="-6,12 -10,18 -6,12" fill="#1e3a8a" opacity="0.6"/>
+    <polygon points="6,12 10,18 6,12" fill="#1e3a8a" opacity="0.6"/>
   </g>
 </svg>`;
 
+/* Red enemy F-16 (cartoony) */
 const svgEnemy = `
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
   <g transform="translate(32,32)">
-    <ellipse rx="6" ry="18" fill="#EF4444"/>
-    <polygon points="18,0 6,-8 6,8" fill="#B91C1C"/>
-    <path d="M-6,6 L-20,14 L-16,6 L-24,2 L-10,0 Z" fill="#FCA5A5"/>
-    <path d="M-6,-6 L-20,-14 L-16,-6 L-24,-2 L-10,0 Z" fill="#FCA5A5"/>
-    <rect x="-8" y="-3" width="6" height="6" rx="1" ry="1" fill="#7f1d1d" transform="translate(-16,0)"/>
-    <ellipse cx="2" cy="0" rx="3" ry="4" fill="#ffdede"/>
-    <path d="M18,0 L6,-8 L6,8 Z" fill="none" stroke="#3b0b0b" stroke-width="0.6" stroke-linejoin="round"/>
+    <polygon points="0,-28 8,-8 20,0 8,8 0,28 -8,8 -20,0 -8,-8" fill="#EF4444" stroke="#7f1d1d" stroke-width="1"/>
+    <polygon points="0,-24 5,-8 12,0 5,8 0,24 -5,8 -12,0 -5,-8" fill="#F87171"/>
+    <ellipse cx="0" cy="-8" rx="4" ry="5" fill="#FECACA"/>
+    <polygon points="-6,12 -10,18 -6,12" fill="#7f1d1d" opacity="0.6"/>
+    <polygon points="6,12 10,18 6,12" fill="#7f1d1d" opacity="0.6"/>
   </g>
 </svg>`;
 
