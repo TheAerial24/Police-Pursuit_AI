@@ -1,369 +1,466 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Tax Evasion</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>Jet Dogfight — Embedded Sprites + Pause</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
-*{box-sizing:border-box;margin:0;padding:0;}
-html,body{width:100%;height:100%;overflow:hidden;font-family:'Inter',sans-serif;color:#1E3A8A;background-color:#60A5FA;}
-#gameCanvas{display:block;background-color:#BFDBFE;position:absolute;top:0;left:0;z-index:1;}
-.ui-container{position:absolute;top:0;left:0;width:100%;height:100%;z-index:2;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;align-items:center;}
-#scoreDisplay{font-size:3rem;font-weight:900;margin-top:2rem;text-shadow:0 0 10px rgba(255,255,255,0.3);}
-#messageOverlay{font-size:1.5rem;font-weight:700;text-align:center;animation:pulse 2s infinite;}
-@keyframes pulse{0%{opacity:1;transform:scale(1);}50%{opacity:0.7;transform:scale(1.05);}100%{opacity:1;transform:scale(1);}}
-#gameOverModal{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:3;background-color:#1F2937;padding:2.5rem;border-radius:1rem;box-shadow:0 10px 30px rgba(0,0,0,0.4);text-align:center;display:none;pointer-events:auto;}
-#gameOverModal h1{font-size:2.5rem;font-weight:900;margin-bottom:0.5rem;color:white;}
-#gameOverModal p{font-size:1.2rem;margin-bottom:2rem;color:#D1D5DB;}
-#restartButton{font-family:'Inter',sans-serif;background:#3B82F6;color:white;border:none;padding:1rem 2rem;border-radius:0.5rem;font-size:1.2rem;font-weight:700;cursor:pointer;transition:all 0.2s ease;box-shadow:0 4px 15px rgba(59,130,246,0.3);}
-#restartButton:hover{background:#2563EB;transform:translateY(-2px);}
-.touch-zone{position:absolute;top:0;width:50%;height:100%;z-index:1;}
-#touchLeft{left:0;}
-#touchRight{right:0;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{width:100%;height:100%;overflow:hidden;font-family:'Inter',sans-serif;background:#60A5FA;color:#0b2447;}
+  #gameCanvas{display:block;background:#bfdbfe;position:absolute;top:0;left:0;z-index:1;}
+  .ui-container{position:absolute;top:0;left:0;width:100%;height:100%;z-index:4;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;align-items:center;}
+  #scoreDisplay{font-size:2.4rem;font-weight:900;margin-top:1.5rem;text-shadow:0 0 8px rgba(255,255,255,0.3);pointer-events:auto;color:#0b2447;}
+  #messageOverlay{font-size:1.1rem;font-weight:700;text-align:center;animation:pulse 2s infinite;pointer-events:auto;color:#07203b;}
+  @keyframes pulse{0%{opacity:1;transform:scale(1);}50%{opacity:0.8;transform:scale(1.02);}100%{opacity:1;transform:scale(1);}}
+  #gameOverModal{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:6;background-color:#111827;padding:2rem;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.45);text-align:center;display:none;pointer-events:auto;color:#e6eef9;}
+  #gameOverModal h1{font-size:2rem;margin-bottom:0.5rem;}
+  #gameOverModal p{font-size:1rem;margin-bottom:1rem;color:#cbd5e1;}
+  #restartButton{font-family:'Inter',sans-serif;background:#3B82F6;color:white;border:none;padding:0.8rem 1.4rem;border-radius:8px;font-size:1rem;font-weight:800;cursor:pointer;transition:all 0.18s ease;box-shadow:0 6px 18px rgba(59,130,246,0.25);}
+  #restartButton:hover{transform:translateY(-3px); background:#2563EB;}
+  .touch-zone{position:absolute;top:0;width:50%;height:100%;z-index:3;pointer-events:auto;}
+  #touchLeft{left:0;}
+  #touchRight{right:0;}
+  .hint { position:absolute; bottom:18px; left:50%; transform:translateX(-50%); font-weight:700; pointer-events:none; color:rgba(3,37,65,0.9);}
 </style>
 </head>
 <body>
 <canvas id="gameCanvas"></canvas>
+
+<!-- Touch zones -->
 <div class="touch-zone" id="touchLeft"></div>
 <div class="touch-zone" id="touchRight"></div>
+
 <div class="ui-container">
-<div id="scoreDisplay">0</div>
-<div id="messageOverlay">Tap Left/Right to Steer<br>Press any key to Start</div>
+  <div id="scoreDisplay">0</div>
+  <div id="messageOverlay">Tap Left/Right to Steer · Press any key to Start<br>Press <strong>P</strong> to Pause</div>
 </div>
+
 <div id="gameOverModal">
-<h1>Game Over</h1>
-<p>Your final score is: <span id="finalScore">0</span></p>
-<p>High Score: <span id="bestScore">0</span></p>
-<button id="restartButton">Retry</button>
+  <h1>Game Over</h1>
+  <p>Your final score is: <strong><span id="finalScore">0</span></strong></p>
+  <p>High Score: <strong><span id="bestScore">0</span></strong></p>
+  <button id="restartButton">Retry</button>
 </div>
+
 <script>
-const canvas=document.getElementById('gameCanvas');
-const ctx=canvas.getContext('2d');
-const scoreDisplay=document.getElementById('scoreDisplay');
-const messageOverlay=document.getElementById('messageOverlay');
-const gameOverModal=document.getElementById('gameOverModal');
-const finalScoreDisplay=document.getElementById('finalScore');
-const bestScoreDisplay=document.getElementById('bestScore');
-const restartButton=document.getElementById('restartButton');
-const touchLeft=document.getElementById('touchLeft');
-const touchRight=document.getElementById('touchRight');
+/* ============================
+   Setup + constants
+   ============================ */
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const scoreDisplay = document.getElementById('scoreDisplay');
+const messageOverlay = document.getElementById('messageOverlay');
+const gameOverModal = document.getElementById('gameOverModal');
+const finalScoreDisplay = document.getElementById('finalScore');
+const bestScoreDisplay = document.getElementById('bestScore');
+const restartButton = document.getElementById('restartButton');
+const touchLeft = document.getElementById('touchLeft');
+const touchRight = document.getElementById('touchRight');
 
-let gameState='menu';
-let score=0,lastTime=0,gameTime=0;
-const camera={x:0,y:0};
-const PLAYER_SPEED=150,PLAYER_TURN_SPEED=3.5;
-const CAR_WIDTH=20,CAR_HEIGHT=40,CAR_RADIUS=8;
-const COP_SPEED=900, COP_TURN_SPEED=1.5;
-const MAX_COPS_ON_SCREEN=5;
-let spawnTimer=0,spawnInterval=5;
+let gameState = 'menu'; // menu | playing | paused | gameOver
+let score = 0, lastTime = 0, gameTime = 0;
+const camera = { x:0, y:0 };
 
-const input={left:false,right:false,fire:false};
-let player={},police=[],particles=[],contrails=[],bullets=[];
-let lastShotTime=0,SHOT_COOLDOWN=25,BULLET_SPEED=1500,BULLET_RADIUS=5;
-let highScore=Number(localStorage.getItem('pp_jet_game_final')||0); 
+const PLAYER_SPEED = 150;
+const PLAYER_TURN_SPEED = 3.5;
+const JET_WIDTH = 48, JET_HEIGHT = 48, JET_RADIUS = 16;
+const ENEMY_SPEED = 250, ENEMY_TURN_SPEED = 2.1;
+const MAX_ENEMIES = 5;
+let spawnTimer = 0, spawnInterval = 4.5;
+
+const input = { left:false, right:false, fire:false };
+let player = null, enemies = [], particles = [], contrails = [], bullets = [];
+let lastShotTime = 0, SHOT_COOLDOWN = 250 /*ms*/, BULLET_SPEED = 1000, BULLET_RADIUS = 5;
+let highScore = Number(localStorage.getItem('jet_dogfight_high') || 0);
 
 const MINIMAP_SCOPE = 4000;
-const COP_SPAWN_INVULNERABILITY = 2.0;
-const DEBUG_MODE = false; 
+const ENEMY_SPAWN_INVULN = 1.5;
+const DEBUG = false;
 
-function resizeCanvas(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;}
-function rand(min,max){return Math.random()*(max-min)+min;}
-function getDistance(x1,y1,x2,y2){return Math.hypot(x2-x1,y2-y2);}
-function wrapAngle(angle){return(angle+Math.PI)%(Math.PI*2)-Math.PI;}
-function createCar(x,y,angle,speed,turnSpeed,color,type){return{x,y,angle,speed,turnSpeed,color,type,width:CAR_WIDTH,height:CAR_HEIGHT,radius:CAR_RADIUS,velX:0,velY:0,spawnTime:gameTime};}
+/* ============================
+   Inline SVG sprites -> data URLs
+   We'll create two SVG strings and encode them at runtime.
+   This avoids external files and makes the HTML self-contained.
+   ============================ */
 
-function resetGame(){
-    player=createCar(0, 0, -Math.PI/2,PLAYER_SPEED,PLAYER_TURN_SPEED,'#3B82F6','player');
-    police=[];particles=[];contrails=[];bullets=[];
-    score=0;gameTime=0;spawnTimer=2;spawnInterval=5;
-    gameState='playing';
-    gameOverModal.style.display='none';
-    messageOverlay.style.display='none';
-    scoreDisplay.style.display='block';
+/* Simple cartoony top-down jet SVG template.
+   Player = blue, Enemy = red. Both have transparent background.
+   The design is intentionally simple for clarity at small sizes. */
+const svgPlayer = `
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <g transform="translate(32,32)">
+    <!-- fuselage -->
+    <ellipse rx="6" ry="18" fill="#3B82F6"/>
+    <!-- nose -->
+    <polygon points="18,0 6,-8 6,8" fill="#2563EB"/>
+    <!-- wings -->
+    <path d="M-6,6 L-20,14 L-16,6 L-24,2 L-10,0 Z" fill="#60A5FA" transform="rotate(0)"/>
+    <path d="M-6,-6 L-20,-14 L-16,-6 L-24,-2 L-10,0 Z" fill="#60A5FA" transform="rotate(0)"/>
+    <!-- tail -->
+    <rect x="-8" y="-3" width="6" height="6" rx="1" ry="1" fill="#1e40af" transform="translate(-16,0)"/>
+    <!-- cockpit -->
+    <ellipse cx="2" cy="0" rx="3" ry="4" fill="#bae6fd"/>
+    <!-- subtle outline -->
+    <path d="M18,0 L6,-8 L6,8 Z" fill="none" stroke="#0b2447" stroke-width="0.6" stroke-linejoin="round"/>
+  </g>
+</svg>`;
+
+const svgEnemy = `
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <g transform="translate(32,32)">
+    <ellipse rx="6" ry="18" fill="#EF4444"/>
+    <polygon points="18,0 6,-8 6,8" fill="#B91C1C"/>
+    <path d="M-6,6 L-20,14 L-16,6 L-24,2 L-10,0 Z" fill="#FCA5A5"/>
+    <path d="M-6,-6 L-20,-14 L-16,-6 L-24,-2 L-10,0 Z" fill="#FCA5A5"/>
+    <rect x="-8" y="-3" width="6" height="6" rx="1" ry="1" fill="#7f1d1d" transform="translate(-16,0)"/>
+    <ellipse cx="2" cy="0" rx="3" ry="4" fill="#ffdede"/>
+    <path d="M18,0 L6,-8 L6,8 Z" fill="none" stroke="#3b0b0b" stroke-width="0.6" stroke-linejoin="round"/>
+  </g>
+</svg>`;
+
+/* Helper to create image object from SVG string */
+function svgToImg(svgString, onload) {
+  const img = new Image();
+  // Use encodeURIComponent to safely include svg text in URL
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgString);
+  img.onload = () => { if (onload) onload(img); };
+  img.onerror = () => { console.warn('Failed to load inline SVG image.'); if (onload) onload(img); };
+  return img;
 }
 
-function spawnPolice(){
-if(police.length>=MAX_COPS_ON_SCREEN)return;
-const spawnAngle=Math.random()*Math.PI*2;
-const spawnDist=Math.max(canvas.width,canvas.height)*0.7;
-const x=player.x+Math.cos(spawnAngle)*spawnDist;
-const y=player.y+Math.sin(spawnAngle)*spawnDist;
-const angle=Math.atan2(player.y-y,player.x-x);
-police.push(createCar(x,y,angle,COP_SPEED,COP_TURN_SPEED,'#EF4444','police'));
+const imgPlayerJet = svgToImg(svgPlayer);
+const imgEnemyJet  = svgToImg(svgEnemy);
+
+/* ============================
+   Utility helpers
+   ============================ */
+function resizeCanvas(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+function rand(min,max){ return Math.random()*(max-min)+min; }
+function getDistance(x1,y1,x2,y2){ return Math.hypot(x2 - x1, y2 - y1); } // fixed correct distance
+function wrapAngle(a){ return (a + Math.PI) % (Math.PI*2) - Math.PI; }
+function createJet(x,y,angle,speed,turnSpeed,color,type){
+  return { x,y,angle,speed,turnSpeed,color,type,width:JET_WIDTH,height:JET_HEIGHT,radius:JET_RADIUS,velX:0,velY:0,spawnTime:gameTime };
+}
+
+/* ============================
+   Game lifecycle
+   ============================ */
+function resetGame(){
+  player = createJet(0,0,-Math.PI/2,PLAYER_SPEED,PLAYER_TURN_SPEED,'#3B82F6','player');
+  enemies = []; particles = []; contrails = []; bullets = [];
+  score = 0; gameTime = 0; spawnTimer = 1.8; spawnInterval = 4.5;
+  gameState = 'playing';
+  gameOverModal.style.display = 'none';
+  messageOverlay.style.display = 'none';
+  scoreDisplay.style.display = 'block';
+}
+
+function spawnEnemy(){
+  if (enemies.length >= MAX_ENEMIES) return;
+  const spawnAngle = Math.random()*Math.PI*2;
+  const spawnDist = Math.max(canvas.width, canvas.height)*0.8;
+  const x = player.x + Math.cos(spawnAngle)*spawnDist;
+  const y = player.y + Math.sin(spawnAngle)*spawnDist;
+  const angle = Math.atan2(player.y - y, player.x - x);
+  enemies.push(createJet(x,y,angle,ENEMY_SPEED,ENEMY_TURN_SPEED,'#EF4444','enemy'));
 }
 
 function createExplosion(x,y,count){
-for(let i=0;i<count;i++){const angle=Math.random()*Math.PI*2;const speed=rand(50,200);const life=rand(0.5,1.5);particles.push({x,y,dx:Math.cos(angle)*speed,dy:Math.sin(angle)*speed,life,maxLife:life,size:rand(2,5)});}
+  for(let i=0;i<count;i++){
+    const angle = Math.random()*Math.PI*2;
+    const speed = rand(40,220);
+    const life = rand(0.6,1.6);
+    particles.push({ x,y,dx:Math.cos(angle)*speed,dy:Math.sin(angle)*speed,life,maxLife:life,size:rand(2,5) });
+  }
 }
 
 function showGameOver(){
-gameState='gameOver';
-scoreDisplay.style.display='none';
-messageOverlay.style.display='none';
-finalScoreDisplay.textContent=score;
-if(score>highScore){highScore=score;localStorage.setItem('pp_jet_game_final',highScore);}
-bestScoreDisplay.textContent=highScore;
-gameOverModal.style.display='block';
+  gameState = 'gameOver';
+  scoreDisplay.style.display = 'none';
+  messageOverlay.style.display = 'none';
+  finalScoreDisplay.textContent = score;
+  if (score > highScore){ highScore = score; localStorage.setItem('jet_dogfight_high', highScore); }
+  bestScoreDisplay.textContent = highScore;
+  gameOverModal.style.display = 'block';
 }
 
-function drawJet(ctx, entity) {
+/* ============================
+   Drawing jets using images
+   ============================ */
+function drawJet(ctx, ent){
   ctx.save();
-  ctx.translate(entity.x, entity.y);
-  ctx.rotate(entity.angle);
-  
-  const w = entity.width * 1.2; 
-  const h = entity.height * 1.2;
-  
-  if (entity.type === 'police' && gameTime - entity.spawnTime < COP_SPAWN_INVULNERABILITY) {
-      ctx.globalAlpha = 0.5;
+  ctx.translate(ent.x, ent.y);
+  ctx.rotate(ent.angle);
+  // pick appropriate image
+  const img = ent.type === 'player' ? imgPlayerJet : imgEnemyJet;
+  const w = ent.width;
+  const h = ent.height;
+  // if image hasn't loaded yet, draw fallback (triangle)
+  if (img && img.complete && img.width){
+    ctx.drawImage(img, -w/2, -h/2, w, h);
+  } else {
+    // fallback triangular jet
+    ctx.fillStyle = ent.color;
+    ctx.beginPath();
+    ctx.moveTo(h/2,0);
+    ctx.lineTo(-h/2, w/2);
+    ctx.lineTo(-h/3,0);
+    ctx.lineTo(-h/2, -w/2);
+    ctx.closePath();
+    ctx.fill();
   }
-  
-  // Draw the jet
-  ctx.fillStyle = entity.color;
-  ctx.beginPath();
-  ctx.moveTo(h / 2, 0); // Nose
-  ctx.lineTo(-h / 2, w / 2); // Left wing tip
-  ctx.lineTo(-h / 3, 0); // Center-back
-  ctx.lineTo(-h / 2, -w / 2); // Right wing tip
-  ctx.closePath(); 
-  ctx.fill();
-  
-  // Draw the hitbox (disabled)
-  if (DEBUG_MODE) {
-      ctx.strokeStyle = '#00FF00';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(0, 0, entity.radius, 0, Math.PI * 2);
-      ctx.stroke();
+  if (ent.type === 'enemy' && gameTime - ent.spawnTime < ENEMY_SPAWN_INVULN) {
+    ctx.globalAlpha = 0.6;
   }
-
+  if (DEBUG){
+    ctx.strokeStyle = '#00ff00';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(0,0,ent.radius,0,Math.PI*2);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
-// --- MAIN UPDATE FUNCTION ---
-function update(deltaTime){
-if(!deltaTime||isNaN(deltaTime))return;
-if(gameState!=='playing')return;
+/* ============================
+   Update loop
+   ============================ */
+function update(dt){
+  if (!dt || isNaN(dt)) return;
+  if (gameState !== 'playing') return;
+  gameTime += dt;
 
-gameTime+=deltaTime;
+  // player steering & drift
+  if (input.left) player.angle -= player.turnSpeed * dt;
+  if (input.right) player.angle += player.turnSpeed * dt;
+  player.velX += Math.cos(player.angle) * player.speed * dt * 0.55;
+  player.velY += Math.sin(player.angle) * player.speed * dt * 0.55;
+  player.velX *= 0.92;
+  player.velY *= 0.92;
+  player.x += player.velX;
+  player.y += player.velY;
 
-// --- Player input & drift ---
-if(input.left)player.angle-=player.turnSpeed*deltaTime;
-if(input.right)player.angle+=player.turnSpeed*deltaTime;
-player.velX+=Math.cos(player.angle)*player.speed*deltaTime*0.5;
-player.velY+=Math.sin(player.angle)*player.speed*deltaTime*0.5;
-player.velX*=0.92;
-player.velY*=0.92;
-player.x+=player.velX;
-player.y+=player.velY;
+  // contrails
+  contrails.push({ x:player.x, y:player.y, angle:player.angle, life:1 });
+  if (contrails.length > 360) contrails.shift();
 
-// --- Contrails ---
-contrails.push({x:player.x,y:player.y,angle:player.angle,life:1});
-if(contrails.length>300)contrails.shift();
+  // enemies AI
+  for (let i=enemies.length-1;i>=0;i--){
+    let e = enemies[i];
+    const targ = Math.atan2(player.y - e.y, player.x - e.x);
+    let diff = wrapAngle(targ - e.angle);
+    const dir = Math.sign(diff);
+    e.angle += Math.min(Math.abs(diff), e.turnSpeed * dt) * dir;
+    e.x += Math.cos(e.angle) * e.speed * dt;
+    e.y += Math.sin(e.angle) * e.speed * dt;
+  }
 
-// --- Police update ---
-for(let i=police.length-1;i>=0;i--){
-let cop=police[i];
-const targetAngle=Math.atan2(player.y-cop.y,player.x-cop.x);
-let angleDiff=wrapAngle(targetAngle-cop.angle);
-const turnDirection=Math.sign(angleDiff);
-cop.angle+=Math.min(Math.abs(angleDiff),cop.turnSpeed*deltaTime)*turnDirection;
-cop.x+=Math.cos(cop.angle)*cop.speed*deltaTime;
-cop.y+=Math.sin(cop.angle)*cop.speed*deltaTime;
-}
+  // spawn enemies
+  spawnTimer -= dt;
+  if (spawnTimer <= 0){
+    spawnEnemy();
+    spawnTimer = spawnInterval;
+    if (spawnInterval > 1.2) spawnInterval *= 0.97;
+  }
 
-// --- Spawn cops ---
-spawnTimer-=deltaTime;
-if(spawnTimer<=0){spawnPolice();spawnTimer=spawnInterval;if(spawnInterval>1)spawnInterval*=0.95;}
-
-// --- Collisions: cops & cops ---
-for (let i = police.length - 1; i >= 0; i--) {
-    for (let j = i - 1; j >= 0; j--) {
-        if (i >= police.length || j >= police.length) continue; 
-        let cop1 = police[i];
-        let cop2 = police[j];
-        
-        if (gameTime - cop1.spawnTime < COP_SPAWN_INVULNERABILITY || gameTime - cop2.spawnTime < COP_SPAWN_INVULNERABILITY) {
-            continue;
-        }
-
-        if (getDistance(cop1.x, cop1.y, cop2.x, cop2.y) < cop1.radius + cop2.radius) {
-            createExplosion(cop1.x, cop1.y, 15);
-            createExplosion(cop2.x, cop2.y, 15);
-            police.splice(i, 1);
-            police.splice(j, 1);
-            score += 200;
-            break; 
-        }
+  // collisions: enemy vs enemy (avoid immediate collisions when recent spawn)
+  for (let i = enemies.length - 1; i >= 0; i--){
+    for (let j = i-1; j >= 0; j--){
+      if (i >= enemies.length || j >= enemies.length) continue;
+      let a = enemies[i], b = enemies[j];
+      if (gameTime - a.spawnTime < ENEMY_SPAWN_INVULN || gameTime - b.spawnTime < ENEMY_SPAWN_INVULN) continue;
+      if (getDistance(a.x,a.y,b.x,b.y) < a.radius + b.radius){
+        createExplosion(a.x,a.y,12);
+        createExplosion(b.x,b.y,12);
+        enemies.splice(i,1);
+        enemies.splice(j,1);
+        score += 200;
+        break;
+      }
     }
-}
+  }
 
-// --- Collisions: player & cops ---
-for(let i=police.length-1;i>=0;i--){
-let cop=police[i];
-
-if (gameTime - cop.spawnTime < COP_SPAWN_INVULNERABILITY) {
-    continue;
-}
-
-if(getDistance(player.x,player.y,cop.x,cop.y)<player.radius+cop.radius){
-    createExplosion(player.x,player.y,30);
-    showGameOver();
-}
-}
-
-// --- Particles update ---
-for(let i=particles.length-1;i>=0;i--){
-let p=particles[i];p.x+=p.dx*deltaTime;p.y+=p.dy*deltaTime;p.life-=deltaTime;if(p.life<=0)particles.splice(i,1);
-}
-
-// --- Handle Firing ---
-if (input.fire) {
-    if (performance.now() - lastShotTime > SHOT_COOLDOWN) {
-        spawnBulletFromCar(player);
-        lastShotTime = performance.now();
+  // collisions: player vs enemy
+  for (let i = enemies.length -1; i>=0; i--){
+    const e = enemies[i];
+    if (gameTime - e.spawnTime < ENEMY_SPAWN_INVULN) continue;
+    if (getDistance(player.x,player.y,e.x,e.y) < player.radius + e.radius){
+      createExplosion(player.x,player.y,28);
+      showGameOver();
+      return;
     }
-}
+  }
 
-// --- Bullets update ---
-for(let i=bullets.length-1;i>=0;i--){
-let b=bullets[i];
-b.x+=b.vx*deltaTime;b.y+=b.vy*deltaTime;b.life-=deltaTime;
-if(b.life<=0){bullets.splice(i,1);continue;}
-for(let j=police.length-1;j>=0;j--){
-let cop=police[j];
-if(getDistance(b.x,b.y,cop.x,cop.y)<BULLET_RADIUS+cop.radius){
-createExplosion(cop.x,cop.y,15);police.splice(j,1);bullets.splice(i,1);
-score += 100;
-break;
-}}}
+  // particles update
+  for (let i = particles.length-1; i>=0; i--){
+    let p = particles[i];
+    p.x += p.dx * dt; p.y += p.dy * dt; p.life -= dt;
+    if (p.life <= 0) particles.splice(i,1);
+  }
 
-scoreDisplay.textContent = score;
-}
-
-function drawMiniMap() {
-    const mapSize = 150;
-    const mapMargin = 20;
-    const mapX = canvas.width - mapSize - mapMargin;
-    const mapY = mapMargin;
-    const scale = mapSize / MINIMAP_SCOPE; 
-    
-    ctx.save();
-    ctx.translate(mapX, mapY);
-
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-    ctx.strokeStyle = 'white';
-    ctx.lineWidth = 2;
-    ctx.fillRect(0, 0, mapSize, mapSize);
-    ctx.strokeRect(0, 0, mapSize, mapSize);
-
-    ctx.fillStyle = player.color;
-    ctx.beginPath();
-    ctx.arc(mapSize / 2, mapSize / 2, 3, 0, Math.PI * 2); 
-    ctx.fill();
-
-    ctx.fillStyle = '#EF4444';
-    for (let cop of police) {
-        const relativeX = cop.x - player.x;
-        const relativeY = cop.y - player.y;
-
-        const mapDotX = (relativeX * scale) + (mapSize / 2);
-        const mapDotY = (relativeY * scale) + (mapSize / 2);
-
-        if (gameTime - cop.spawnTime < COP_SPAWN_INVULNERABILITY) {
-            ctx.globalAlpha = 0.5;
-        } else {
-            ctx.globalAlpha = 1.0;
-        }
-
-        if (mapDotX > 0 && mapDotX < mapSize && mapDotY > 0 && mapDotY < mapSize) {
-            ctx.beginPath();
-            ctx.arc(mapDotX, mapDotY, 2, 0, Math.PI * 2); 
-            ctx.fill();
-        }
+  // firing
+  if (input.fire){
+    if (performance.now() - lastShotTime > SHOT_COOLDOWN){
+      spawnBulletFromJet(player);
+      lastShotTime = performance.now();
     }
-    
-    ctx.restore(); 
+  }
+
+  // bullets update + collisions vs enemies
+  for (let i = bullets.length-1; i>=0; i--){
+    let b = bullets[i];
+    b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
+    if (b.life <= 0){ bullets.splice(i,1); continue; }
+    for (let j = enemies.length-1; j>=0; j--){
+      let e = enemies[j];
+      if (getDistance(b.x,b.y,e.x,e.y) < BULLET_RADIUS + e.radius){
+        createExplosion(e.x,e.y,14);
+        enemies.splice(j,1);
+        bullets.splice(i,1);
+        score += 100;
+        break;
+      }
+    }
+  }
+
+  scoreDisplay.textContent = score;
 }
 
-// --- DRAW FUNCTION ---
+/* ============================
+   Mini map
+   ============================ */
+function drawMiniMap(){
+  const mapSize = 140; const mapMargin = 16;
+  const mapX = canvas.width - mapSize - mapMargin; const mapY = mapMargin;
+  const scale = mapSize / MINIMAP_SCOPE;
+  ctx.save(); ctx.translate(mapX,mapY);
+  ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.fillRect(0,0,mapSize,mapSize);
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.6; ctx.strokeRect(0,0,mapSize,mapSize);
+  // player dot center
+  ctx.globalAlpha = 1.0;
+  ctx.fillStyle = player.color; ctx.beginPath(); ctx.arc(mapSize/2, mapSize/2, 3, 0, Math.PI*2); ctx.fill();
+  for (let e of enemies){
+    const rx = e.x - player.x, ry = e.y - player.y;
+    const dx = (rx * scale) + (mapSize/2), dy = (ry * scale) + (mapSize/2);
+    ctx.globalAlpha = (gameTime - e.spawnTime < ENEMY_SPAWN_INVULN) ? 0.5 : 1.0;
+    if (dx > 0 && dx < mapSize && dy > 0 && dy < mapSize){
+      ctx.fillStyle = '#EF4444'; ctx.beginPath(); ctx.arc(dx,dy,2,0,Math.PI*2); ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1.0; ctx.restore();
+}
+
+/* ============================
+   Draw everything
+   ============================ */
 function draw(){
-ctx.clearRect(0,0,canvas.width,canvas.height);
-// This check prevents the game from crashing before 'player' is created
-if (player && player.x !== undefined) {
-    camera.x=player.x;
-    camera.y=player.y;
-} else {
-    camera.x = 0;
-    camera.y = 0;
-}
-ctx.save();ctx.translate(canvas.width/2-camera.x,canvas.height/2-camera.y);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
-// --- Draw contrails
-for(let s of contrails){
-    s.life-=0.02;
+  camera.x = (player && player.x !== undefined) ? player.x : 0;
+  camera.y = (player && player.y !== undefined) ? player.y : 0;
+
+  ctx.save();
+  ctx.translate(canvas.width/2 - camera.x, canvas.height/2 - camera.y);
+
+  // contrails
+  for (let s of contrails){
+    s.life -= 0.02;
     ctx.save();
-    ctx.translate(s.x,s.y);
-    ctx.rotate(s.angle);
-    ctx.fillStyle=`rgba(255,255,255,${s.life * 0.5})`; 
-    ctx.fillRect(-10,-2,20,4);
+    ctx.translate(s.x, s.y); ctx.rotate(s.angle);
+    ctx.fillStyle = `rgba(255,255,255,${Math.max(0, s.life * 0.45)})`;
+    ctx.fillRect(-12, -2.5, 24, 5);
     ctx.restore();
+  }
+
+  // particles
+  for (let p of particles){
+    ctx.fillStyle = `rgba(255,165,0,${Math.max(0, p.life/p.maxLife)})`;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
+  }
+
+  // bullets
+  for (let b of bullets){
+    ctx.fillStyle = '#ffeb3b'; ctx.beginPath(); ctx.arc(b.x,b.y,BULLET_RADIUS,0,Math.PI*2); ctx.fill();
+  }
+
+  // draw jets
+  if (player && player.x !== undefined) drawJet(ctx, player);
+  for (let e of enemies) drawJet(ctx, e);
+
+  ctx.restore();
+
+  if (player && player.x !== undefined) drawMiniMap();
 }
 
-for(let p of particles){ctx.fillStyle=`rgba(255,165,0,${p.life/p.maxLife})`;ctx.beginPath();ctx.arc(p.x,p.y,p.size,0,Math.PI * 2);ctx.fill();}
-for(let b of bullets){ctx.fillStyle='yellow';ctx.beginPath();ctx.arc(b.x,b.y,BULLET_RADIUS,0,Math.PI * 2);ctx.fill();}
+/* ============================
+   Input handlers & spawn bullets
+   ============================ */
+restartButton.addEventListener('click', resetGame);
+window.addEventListener('resize', resizeCanvas);
 
-// Only draw the player if the game has started and the player object exists
-if (player && player.x !== undefined) {
-    drawJet(ctx, player);
-}
-for(let cop of police){ drawJet(ctx, cop); }
+window.addEventListener('keydown', e => {
+  // start from menu
+  if (gameState === 'menu'){
+    resetGame(); return;
+  }
 
-ctx.restore(); 
+  // Pause/unpause on 'p' or 'P'
+  if ((e.key === 'p' || e.key === 'P')) {
+    if (gameState === 'playing') {
+      gameState = 'paused';
+      messageOverlay.textContent = 'PAUSED · Press P to Resume';
+      messageOverlay.style.display = 'block';
+    } else if (gameState === 'paused') {
+      gameState = 'playing';
+      messageOverlay.style.display = 'none';
+    }
+    // don't block other keys handling
+  }
 
-// Draw minimap only if player exists
-if (player && player.x !== undefined) {
-    drawMiniMap();
-}
-}
-
-// --- MAIN LOOP ---
-function gameLoop(timestamp){const deltaTime=(timestamp-lastTime)/1000;lastTime=timestamp;if(gameState==='playing')update(deltaTime);draw();requestAnimationFrame(gameLoop);}
-
-// --- INPUT ---
-restartButton.addEventListener('click',resetGame);
-window.addEventListener('resize',resizeCanvas);
-
-window.addEventListener('keydown',e=>{
-if(gameState==='menu')resetGame();
-if(e.key==='ArrowLeft')input.left=true;
-if(e.key==='ArrowRight')input.right=true;
-if(e.code==='Space')input.fire=true;
+  if (e.key === 'ArrowLeft') input.left = true;
+  if (e.key === 'ArrowRight') input.right = true;
+  if (e.code === 'Space') input.fire = true;
 });
 
-// --- THIS WAS THE BUG. IT IS NOW FIXED. ---
-window.addEventListener('keyup',e=>{
-if(e.key==='ArrowLeft')input.left=false; // Was e.keykey
-if(e.key==='ArrowRight')input.right=false;
-if(e.code==='Space')input.fire=false;
+window.addEventListener('keyup', e => {
+  if (e.key === 'ArrowLeft') input.left = false;
+  if (e.key === 'ArrowRight') input.right = false;
+  if (e.code === 'Space') input.fire = false;
 });
 
-touchLeft.addEventListener('touchstart',e=>{e.preventDefault();input.left=true;if(gameState==='menu')resetGame();},{passive:false});
-touchLeft.addEventListener('touchend',e=>{e.preventDefault();input.left=false;},{passive:false});
-touchRight.addEventListener('touchstart',e=>{e.preventDefault();input.right=true;if(gameState==='menu')resetGame();},{passive:false});
-touchRight.addEventListener('touchend',e=>{e.preventDefault();input.right=false;},{passive:false}); 
+touchLeft.addEventListener('touchstart', e => { e.preventDefault(); input.left = true; if (gameState === 'menu') resetGame(); }, { passive:false });
+touchLeft.addEventListener('touchend',   e => { e.preventDefault(); input.left = false; }, { passive:false });
+touchRight.addEventListener('touchstart', e => { e.preventDefault(); input.right = true; if (gameState === 'menu') resetGame(); }, { passive:false });
+touchRight.addEventListener('touchend',   e => { e.preventDefault(); input.right = false; }, { passive:false });
 
-// --- BULLETS ---
-function spawnBulletFromCar(car){
-const noseOffset=(car.height/2)+6;
-const bx=car.x+Math.cos(car.angle)*noseOffset;
-const by=car.y+Math.sin(car.angle)*noseOffset;
-bullets.push({x:bx,y:by,vx:Math.cos(car.angle)*BULLET_SPEED,vy:Math.sin(car.angle)*BULLET_SPEED,life:2.5,radius:BULLET_RADIUS});
+function spawnBulletFromJet(jet){
+  const nose = (jet.height/2) + 6;
+  const bx = jet.x + Math.cos(jet.angle) * nose;
+  const by = jet.y + Math.sin(jet.angle) * nose;
+  bullets.push({ x:bx, y:by, vx:Math.cos(jet.angle)*BULLET_SPEED, vy:Math.sin(jet.angle)*BULLET_SPEED, life:2.2 });
 }
 
-// --- START ---
-resizeCanvas();lastTime=performance.now();requestAnimationFrame(gameLoop);
+/* expose a simple alias used earlier */
+function spawnBulletFromCar(car){ spawnBulletFromJet(car); }
+
+/* ============================
+   Main loop start
+   ============================ */
+resizeCanvas();
+lastTime = performance.now();
+requestAnimationFrame(function loop(t){
+  const dt = (t - lastTime) / 1000;
+  lastTime = t;
+  if (gameState === 'playing') update(dt);
+  draw();
+  requestAnimationFrame(loop);
+});
+
+/* Set initial UI values */
+scoreDisplay.textContent = score;
+bestScoreDisplay.textContent = highScore;
+messageOverlay.style.display = 'block';
 </script>
 </body>
 </html>
