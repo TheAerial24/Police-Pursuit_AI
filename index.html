@@ -19,7 +19,6 @@
             background-color: #000;
             display: block;
             margin: 0 auto;
-            cursor: pointer; 
         }
 
         h1, p {
@@ -59,13 +58,6 @@
         let frameCount = 0;
         let fps = 0;
 
-        // --- NEW ACHIEVEMENT VARIABLES ---
-        let achievements = {};
-        let totalKills = 0;
-        let distanceTravelled = 0;
-        let showingAchievements = false;
-        // --- END NEW ACHIEVEMENT VARIABLES ---
-
         const playerImg = new Image();
         playerImg.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAsQAAALEBGBJ04gAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAADdSURBVEiJrdW9LkMBGIDh909sYCSKaGxs/G9sBFtFEJsYJDbxL2JjGz8g3YAdhQy7C04kznlOS5KRJOfpbpLzAYvAo3bARfAJfGGKAEYtB1yARWAU2Kg2YJgVuATeAAN2gAWwBLR6DbBKYf6FNQB9AK/AXvAAXARGS1P0AKYJbJHvAWeAFaBDEdgR+AfYBNY0xYEVMI1sEfgM+KsaAy/AJjCGrAfYBN5TYBsoAbsBq8AacAJ8BXbVglsAGWAOuAK+M09sPXYvA3aBnTAN7BUP7hfsisAh8CNn5wBNAk78AfuXCQAAAABJRU5ErkJggg==';
 
@@ -96,35 +88,18 @@
             keys[e.key] = false;
         });
 
-        // --- NEW CLICK HANDLER ---
-        canvas.addEventListener('click', handleCanvasClick);
+        canvas.addEventListener('click', (e) => {
+            if (gameOver && !cheatingDetected) {
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
 
-        function handleCanvasClick(e) {
-            const rect = canvas.getBoundingClientRect();
-            const mouseX = e.clientX - rect.left;
-            const mouseY = e.clientY - rect.top;
-
-            if (showingAchievements) {
-                // Check for "Close" button click (top right of modal)
-                if (mouseX > canvas.width - 100 - 10 && mouseX < canvas.width - 50 + 10 &&
-                    mouseY > 60 - 10 && mouseY < 90 + 5) {
-                    showingAchievements = false;
-                }
-            } else if (gameOver && !cheatingDetected) {
-                // Check for "Retry" button click
                 if (mouseX > canvas.width / 2 - 50 && mouseX < canvas.width / 2 + 50 &&
                     mouseY > canvas.height / 2 + 60 && mouseY < canvas.height / 2 + 90) {
                     resetGame();
                 }
-                
-                // Check for "Achievements" button click (top left)
-                if (mouseX > 10 && mouseX < 160 && mouseY > 10 && mouseY < 50) {
-                    showingAchievements = true;
-                }
             }
-        }
-        // --- END NEW CLICK HANDLER ---
-
+        });
 
         function shoot() {
             const bullet = {
@@ -174,11 +149,6 @@
             enemySpeed = 2;
             enemySpawnRate = 2000;
             lastEnemySpawn = 0;
-            // --- NEW ACHIEVEMENT RESETS ---
-            totalKills = 0;
-            distanceTravelled = 0;
-            showingAchievements = false;
-            // --- END NEW ACHIEVEMENT RESETS ---
         }
 
         function detectCheating() {
@@ -186,8 +156,6 @@
                 cheatingDetected = true;
                 gameOver = true;
                 gameStarted = false;
-                // --- NEW ---
-                unlockAchievement('cheater');
             }
         }
 
@@ -201,10 +169,6 @@
             ctx.font = '20px Arial';
             ctx.fillText('Nice try, buddy.', canvas.width / 2, canvas.height / 2);
             ctx.fillText(`Final Score: ${score}`, canvas.width / 2, canvas.height / 2 + 40);
-            
-            // --- NEW ---
-            // Trigger "No More" check just in case this was the last one
-            checkAllAchievements(); 
         }
 
         function drawStartScreen() {
@@ -239,16 +203,6 @@
             ctx.fillStyle = '#fff';
             ctx.font = '20px Arial';
             ctx.fillText('Retry', canvas.width / 2, canvas.height / 2 + 82);
-            
-            // --- NEW ACHIEVEMENT BUTTON ---
-            ctx.fillStyle = '#007BFF';
-            ctx.fillRect(10, 10, 150, 40);
-            ctx.fillStyle = '#fff';
-            ctx.font = '18px Arial';
-            ctx.textAlign = 'left';
-            ctx.fillText('Achievements', 20, 37);
-            ctx.textAlign = 'center'; // Reset alignment
-            // --- END NEW ACHIEVEMENT BUTTON ---
         }
 
         function drawPauseScreen() {
@@ -281,14 +235,6 @@
                     highScore = score;
                     localStorage.setItem('dogfightHighScore', highScore);
                 }
-                
-                // --- NEW ACHIEVEMENT CHECKS ON GAME OVER ---
-                if (score > 10000) {
-                    unlockAchievement('highScore');
-                }
-                // Check if this game over completed all achievements
-                checkAllAchievements();
-                // --- END NEW ACHIEVEMENT CHECKS ---
                 return;
             }
 
@@ -300,7 +246,6 @@
                 return;
             }
             
-            // --- NEW ---
             detectCheating();
             if (cheatingDetected) {
                 return;
@@ -320,13 +265,6 @@
             if (player.x < 0) player.x = 0;
             if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
 
-            // --- NEW: Track distance ---
-            distanceTravelled += enemySpeed;
-            if (distanceTravelled >= 5000) {
-                unlockAchievement('traveller');
-            }
-            // --- END NEW ---
-
             // Update bullets
             for (let i = bullets.length - 1; i >= 0; i--) {
                 bullets[i].y -= bullets[i].speed;
@@ -343,53 +281,18 @@
                 }
             }
 
-            // Collision detection: Bullets and Enemies
+            // Collision detection
             for (let i = bullets.length - 1; i >= 0; i--) {
                 for (let j = enemies.length - 1; j >= 0; j--) {
                     if (detectCollision(bullets[i], enemies[j])) {
                         bullets.splice(i, 1);
                         enemies.splice(j, 1);
                         score += 100;
-                        
-                        // --- NEW ACHIEVEMENT CHECKS ---
-                        totalKills++;
-                        unlockAchievement('firstBlood');
-                        if (totalKills >= 50) {
-                            unlockAchievement('50kills');
-                        }
-                        // --- END NEW ---
                         break; 
                     }
                 }
             }
-            
-            // --- NEW: Collision detection: Enemy and Enemy ---
-            for (let i = 0; i < enemies.length; i++) {
-                for (let j = i + 1; j < enemies.length; j++) {
-                    if (detectCollision(enemies[i], enemies[j])) {
-                        // Remove both enemies
-                        enemies.splice(j, 1); // Remove j first (higher index)
-                        enemies.splice(i, 1);
 
-                        // --- NEW ACHIEVEMENT CHECKS ---
-                        unlockAchievement('evasion');
-                        
-                        totalKills += 2; // Both are "killed"
-                        unlockAchievement('firstBlood'); // Counts as first blood
-                        if (totalKills >= 50) {
-                            unlockAchievement('50kills');
-                        }
-                        // --- END NEW ---
-                        
-                        i--; // Adjust outer loop index
-                        break; // Exit inner loop
-                    }
-                }
-            }
-            // --- END NEW ---
-
-
-            // Collision detection: Player and Enemies
             for (let i = enemies.length - 1; i >= 0; i--) {
                 if (detectCollision(player, enemies[i])) {
                     gameOver = true;
@@ -433,12 +336,6 @@
                 drawScore();
                 drawFPS();
             }
-            
-            // --- NEW: Draw achievement modal ---
-            if (showingAchievements) {
-                drawAchievements();
-            }
-            // --- END NEW ---
         }
 
         function gameLoop(timestamp) {
@@ -461,132 +358,7 @@
             }
         }
 
-        // --- NEW ACHIEVEMENT FUNCTIONS ---
-
-        function initializeAchievements() {
-            const defaultAchievements = {
-                'firstBlood': { name: 'First Blood', description: 'Destroy your first enemy.', unlocked: false },
-                'evasion': { name: 'Evasion', description: 'Have 2 enemies collide with one another.', unlocked: false },
-                'traveller': { name: 'Traveller', description: 'Travel 5000 pixels.', unlocked: false },
-                '50kills': { name: '50 Kills', description: 'Get 50 total kills.', unlocked: false },
-                'cheater': { name: 'Cheater', description: 'Get caught by the anticheat.', unlocked: false },
-                'highScore': { name: 'High Score', description: 'Get a score over 10000.', unlocked: false },
-                'noMore': { name: 'No More', description: 'Unlock all other achievements.', unlocked: false }
-            };
-            
-            achievements = defaultAchievements;
-        }
-
-        function loadAchievements() {
-            const saved = localStorage.getItem('dogfightAchievements');
-            if (saved) {
-                achievements = JSON.parse(saved);
-                // This ensures if we add new achievements later, they get added
-                initializeAchievements(); 
-                let savedObj = JSON.parse(saved);
-                for (let key in achievements) {
-                    if (savedObj[key]) {
-                        achievements[key].unlocked = savedObj[key].unlocked;
-                    }
-                }
-            } else {
-                initializeAchievements();
-            }
-        }
-
-        function saveAchievements() {
-            localStorage.setItem('dogfightAchievements', JSON.stringify(achievements));
-        }
-
-        function unlockAchievement(id) {
-            if (achievements[id] && !achievements[id].unlocked) {
-                achievements[id].unlocked = true;
-                
-                // Special check for 'noMore'
-                if (id !== 'noMore') {
-                    checkAllAchievements(); // Check if this unlock triggered 'noMore'
-                }
-                
-                saveAchievements();
-            }
-        }
-
-        function checkAllAchievements() {
-            // Don't check if 'noMore' is already unlocked
-            if (achievements.noMore.unlocked) return;
-
-            let allOthersUnlocked = true;
-            for (const key in achievements) {
-                if (key !== 'noMore' && !achievements[key].unlocked) {
-                    allOthersUnlocked = false;
-                    break;
-                }
-            }
-
-            if (allOthersUnlocked) {
-                // Manually unlock 'noMore' to avoid recursion
-                achievements.noMore.unlocked = true;
-            }
-        }
-
-        function drawAchievements() {
-            // Background overlay
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // Modal box
-            ctx.fillStyle = '#222';
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 2;
-            ctx.fillRect(50, 50, canvas.width - 100, canvas.height - 100);
-            ctx.strokeRect(50, 50, canvas.width - 100, canvas.height - 100);
-
-            // Title
-            ctx.fillStyle = '#fff';
-            ctx.font = '28px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('Achievements', canvas.width / 2, 90);
-
-            // Close button
-            ctx.fillStyle = '#ccc';
-            ctx.fillRect(canvas.width - 100, 60, 40, 30);
-            ctx.fillStyle = '#000';
-            ctx.font = '20px Arial';
-            ctx.fillText('X', canvas.width - 80, 82);
-
-            // List achievements
-            let yPos = 140;
-            for (const key in achievements) {
-                const ach = achievements[key];
-                
-                if (ach.unlocked) {
-                    ctx.fillStyle = '#4CAF50'; // Green for unlocked
-                } else {
-                    ctx.fillStyle = '#777'; // Grey for locked
-                }
-                
-                ctx.textAlign = 'left';
-                ctx.font = '20px Arial';
-                ctx.fillText(ach.name, 70, yPos);
-                
-                if (ach.unlocked) {
-                    ctx.fillStyle = '#ccc';
-                } else {
-                    ctx.fillStyle = '#555';
-                }
-                ctx.font = '14px Arial';
-                ctx.fillText(ach.description, 70, yPos + 20);
-                
-                yPos += 60;
-            }
-            ctx.textAlign = 'center'; // Reset alignment
-        }
-
-        // --- END NEW ACHIEVEMENT FUNCTIONS ---
-
-
         // Initial call to start the screen
-        loadAchievements(); // --- NEW ---
         draw();
     </script>
 </body>
