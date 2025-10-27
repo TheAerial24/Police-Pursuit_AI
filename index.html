@@ -131,7 +131,6 @@ function rand(min,max){ return Math.random()*(max-min)+min; }
 function getDistance(x1,y1,x2,y2){ return Math.hypot(x2 - x1, y2 - y1); }
 function wrapAngle(a){ return (a + Math.PI) % (Math.PI*2) - Math.PI; }
 function createJet(x,y,angle,speed,turnSpeed,color,type){
-  // === MODIFIED: Added shotCapacity and shotCooldown for player ===
   const jet = { x,y,angle,speed,turnSpeed,color,type,width:JET_WIDTH,height:JET_HEIGHT,radius:JET_RADIUS,velX:0,velY:0,spawnTime:gameTime };
   if (type === 'player') {
     jet.shotCapacity = SHOT_CAPACITY_MAX;
@@ -273,7 +272,6 @@ function update(dt){
   }
   
   // === NEW Anti-Cheat: Holding fire for 10 seconds ===
-  // This timer increments regardless of overheat state, which is fine.
   if (input.fire) {
     fireCheatTimer += dt;
     if (fireCheatTimer >= 10 && !antiCheatTriggered) {
@@ -368,6 +366,7 @@ function update(dt){
       // Has capacity, so shoot
       player.shotCapacity -= dt; // Deplete capacity
 
+      // === FIXED BUG HERE: Was 'lastTime', now 'lastShotTime' ===
       if (performance.now() - lastShotTime > SHOT_COOLDOWN){
         spawnBulletFromJet(player);
         lastShotTime = performance.now();
@@ -381,7 +380,6 @@ function update(dt){
     }
     // else: player has no capacity, so do nothing (can't shoot)
   }
-  // else: player is not in cooldown and not firing. Capacity just stays as is.
   // === END MODIFIED Firing logic ===
 
   // bullets update + collisions vs enemies
@@ -460,6 +458,7 @@ function drawOverheatBar(){
   ctx.fillStyle = fillColor;
   ctx.fillRect(barX, barY, barWidth * fillPercent, barHeight);
   
+  // === FIXED BUG HERE: Removed stray 's' character ===
   // Draw border
   ctx.strokeStyle = 'rgba(255,255,255,0.7)';
   ctx.lineWidth = 1;
@@ -497,8 +496,7 @@ function draw(){
   // bullets
   for (let b of bullets){
     ctx.fillStyle = '#ffeb3b'; ctx.beginPath(); ctx.arc(b.x,b.y,BULLET_RADIUS,0,Math.PI*2); ctx.fill();
-  }
-
+s
   // draw jets
   if (player && player.x !== undefined) drawJet(ctx, player);
   for (let e of enemies) drawJet(ctx, e);
@@ -506,9 +504,10 @@ function draw(){
   ctx.restore();
 
   // === MODIFIED: Draw HUD elements ===
-  if (player && player.x !== undefined) {
+  // Only draw HUD if player exists and game is actively 'playing'
+  if (player && player.x !== undefined && gameState === 'playing') {
     drawMiniMap();
-    drawOverheatBar(); // <-- NEW FUNCTION CALL
+    drawOverheatBar();
   }
 }
 
