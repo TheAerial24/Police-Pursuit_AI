@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
@@ -60,13 +60,15 @@ const touchRight = document.getElementById('touchRight');
 
 let gameState = 'menu'; // menu | playing | paused | gameOver
 let score = 0, lastTime = 0, gameTime = 0;
-const camera = { x:0, y:0 };
 
-/* ====== CHANGED: PLAYER + ENEMY SPEEDS ====== */
+/* === Anti-Cheat Vars (ADDED ONLY) === */
+let antiCheatTimer = 0;
+let antiCheatTriggered = false;
+
+const camera = { x:0, y:0 };
 const PLAYER_SPEED = 120;
 const PLAYER_TURN_SPEED = 3.5;
 const JET_WIDTH = 48, JET_HEIGHT = 48, JET_RADIUS = 16;
-/* ENEMY_SPEED changed to match player speed */
 const ENEMY_SPEED = 120, ENEMY_TURN_SPEED = 2.1;
 const MAX_ENEMIES = 5;
 let spawnTimer = 0, spawnInterval = 4.5;
@@ -150,6 +152,9 @@ function resetGame(){
   gameOverModal.style.display = 'none';
   messageOverlay.style.display = 'none';
   scoreDisplay.style.display = 'block';
+  // reset anti-cheat tracking (ADDED)
+  antiCheatTimer = 0;
+  antiCheatTriggered = false;
 }
 
 function spawnEnemy(){
@@ -179,6 +184,26 @@ function showGameOver(){
   if (score > highScore){ highScore = score; localStorage.setItem('jet_dogfight_high', highScore); }
   bestScoreDisplay.textContent = highScore;
   gameOverModal.style.display = 'block';
+  gameOverModal.querySelector('h1').textContent = 'Game Over';
+}
+
+/* ============================
+   Anti-Cheat: Special end screen (ADDED)
+   This end screen is identical to the normal gameOver modal
+   except the header reads "Anti Cheat Is: Active" and the button text is changed.
+   ============================ */
+function showAntiCheat(){
+  gameState = 'gameOver';
+  scoreDisplay.style.display = 'none';
+  messageOverlay.style.display = 'none';
+  finalScoreDisplay.textContent = score;
+  if (score > highScore){ highScore = score; localStorage.setItem('jet_dogfight_high', highScore); }
+  bestScoreDisplay.textContent = highScore;
+  gameOverModal.style.display = 'block';
+  // change the header text to indicate anti-cheat
+  gameOverModal.querySelector('h1').textContent = 'Anti Cheat Is: Active';
+  // place restart button above (we already have a restart button; change its text)
+  restartButton.textContent = 'Restart Game';
 }
 
 /* ============================
@@ -226,6 +251,21 @@ function update(dt){
   if (!dt || isNaN(dt)) return;
   if (gameState !== 'playing') return;
   gameTime += dt;
+
+  // === Anti-cheat: Holding fire + left/right continuously for 5 seconds ===
+  // Only added code here — detection for sustained space + turn
+  if (input.fire && (input.left || input.right)) {
+    antiCheatTimer += dt;
+    if (antiCheatTimer >= 5 && !antiCheatTriggered) {
+      antiCheatTriggered = true;
+      createExplosion(player.x, player.y, 30);
+      showAntiCheat();
+      return; // stop further updates after anti-cheat triggers
+    }
+  } else {
+    // reset timer when condition not met
+    antiCheatTimer = 0;
+  }
 
   // player steering & drift
   if (input.left) player.angle -= player.turnSpeed * dt;
