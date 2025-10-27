@@ -175,7 +175,7 @@ function createExplosion(x,y,count){
     const speed = rand(40,220);
     const life = rand(0.6,1.6);
     particles.push({ x,y,dx:Math.cos(angle)*speed,dy:Math.sin(angle)*speed,life,maxLife:life,size:rand(2,5) });
-  }
+_ }
 }
 
 function showGameOver(){
@@ -325,7 +325,7 @@ function update(dt){
       if (i >= enemies.length || j >= enemies.length) continue;
       let a = enemies[i], b = enemies[j];
       if (gameTime - a.spawnTime < ENEMY_SPAWN_INVULN || gameTime - b.spawnTime < ENEMY_SPAWN_INVULN) continue;
-      if (getDistance(a.x,a.y,b.x,b.y) < a.radius + b.radius){
+Â     if (getDistance(a.x,a.y,b.x,b.y) < a.radius + b.radius){
         createExplosion(a.x,a.y,12);
         createExplosion(b.x,b.y,12);
         enemies.splice(i,1);
@@ -383,6 +383,7 @@ function update(dt){
   }
   // === END MODIFIED Firing logic ===
 
+
   // bullets update + collisions vs enemies
   for (let i = bullets.length-1; i>=0; i--){
     let b = bullets[i];
@@ -413,7 +414,6 @@ function drawMiniMap(){
   ctx.save(); ctx.translate(mapX,mapY);
   ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.fillRect(0,0,mapSize,mapSize);
   ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.6; ctx.strokeRect(0,0,mapSize,mapSize);
-section
   // player dot center
   ctx.globalAlpha = 1.0;
   ctx.fillStyle = player.color; ctx.beginPath(); ctx.arc(mapSize/2, mapSize/2, 3, 0, Math.PI*2); ctx.fill();
@@ -449,7 +449,7 @@ function drawOverheatBar(){
   } else {
     // We are not in cooldown, show capacity
     fillPercent = player.shotCapacity / SHOT_CAPACITY_MAX;
-    fillColor = 'rgba(255, 235, 59, 0.8)'; // Yellow for capacity
+a    fillColor = 'rgba(255, 235, 59, 0.8)'; // Yellow for capacity
   }
 
   // Draw background
@@ -468,7 +468,7 @@ function drawOverheatBar(){
 
 
 /* ============================
-_   Draw everything
+    Draw everything
     ============================ */
 function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -492,7 +492,7 @@ function draw(){
   // particles
   for (let p of particles){
     ctx.fillStyle = `rgba(255,165,0,${Math.max(0, p.life/p.maxLife)})`;
-s   ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
   }
 
   // bullets
@@ -523,7 +523,7 @@ restartButton.addEventListener('click', resetGame);
 window.addEventListener('resize', resizeCanvas);
 
 window.addEventListener('keydown', e => {
-  if (gameState === 'menu'){
+i  if (gameState === 'menu'){
     resetGame(); return;
   }
 
@@ -544,7 +544,7 @@ window.addEventListener('keydown', e => {
 });
 
 window.addEventListener('keyup', e => {
-  if (e.key === 'ArrowLeft') input.left = false;
+A  if (e.key === 'ArrowLeft') input.left = false;
   if (e.key === 'ArrowRight') input.right = false;
   if (e.code === 'Space') input.fire = false;
 });
@@ -564,7 +564,7 @@ function spawnBulletFromJet(jet){
 function spawnBulletFromCar(car){ spawnBulletFromJet(car); }
 
 /* ============================
-    Main loop start
+s   Main loop start
     ============================ */
 resizeCanvas();
 lastTime = performance.now();
