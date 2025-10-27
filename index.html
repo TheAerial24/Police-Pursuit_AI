@@ -22,6 +22,9 @@
   #touchLeft{left:0;}
   #touchRight{right:0;}
   .hint { position:absolute; bottom:18px; left:50%; transform:translateX(-50%); font-weight:700; pointer-events:none; color:rgba(3,37,65,0.9);}
+  #achievementContainer{position:absolute;top:80px;left:50%;transform:translateX(-50%);pointer-events:none;z-index:5;}
+  #marathonBarContainer{position:relative;width:320px;height:16px;background:rgba(0,0,0,0.2);border-radius:8px;margin-top:0.5rem;overflow:hidden;pointer-events:none;}
+  #marathonBar{width:0%;height:100%;background:#3B82F6;border-radius:8px;box-shadow:0 0 6px rgba(255,255,255,0.6);transition:width 0.2s ease;}
 </style>
 </head>
 <body>
@@ -32,10 +35,12 @@
 <div class="touch-zone" id="touchRight"></div>
 
 <div class="ui-container">
+  <div id="marathonBarContainer"><div id="marathonBar"></div></div>
   <div id="scoreDisplay">0</div>
-  <div id="messageOverlay">Tap Left/Right to Steer · Press any key to Start<br>Press <strong>P</strong> to Pause</div>
-  <div id="messageOverlay">Tap/Press Left/Right to Steer-Spacebar to Shoot · Press any key to Start<br>Press <strong>P</strong> to Pause</div>
+  <div id="messageOverlay">Tap/Press Left/Right to Steer · Spacebar to Shoot · Press any key to Start<br>Press <strong>P</strong> to Pause</div>
 </div>
+
+<div id="achievementContainer"></div>
 
 <div id="gameOverModal">
   <h1>Game Over</h1>
@@ -46,8 +51,8 @@
 
 <script>
 /* ============================
-   Setup + constants
-   ============================ */
+   SETUP + CONSTANTS
+============================ */
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const scoreDisplay = document.getElementById('scoreDisplay');
@@ -58,11 +63,11 @@ const bestScoreDisplay = document.getElementById('bestScore');
 const restartButton = document.getElementById('restartButton');
 const touchLeft = document.getElementById('touchLeft');
 const touchRight = document.getElementById('touchRight');
+const marathonBar = document.getElementById('marathonBar');
+const achievementContainer = document.getElementById('achievementContainer');
 
-let gameState = 'menu'; // menu | playing | paused | gameOver
+let gameState = 'menu';
 let score = 0, lastTime = 0, gameTime = 0;
-
-/* === Anti-Cheat Vars (ADDED ONLY) === */
 let antiCheatTimer = 0;
 let antiCheatTriggered = false;
 
@@ -76,7 +81,7 @@ let spawnTimer = 0, spawnInterval = 4.5;
 
 const input = { left:false, right:false, fire:false };
 let player = null, enemies = [], particles = [], contrails = [], bullets = [];
-let lastShotTime = 0, SHOT_COOLDOWN = 5 /*ms*/, BULLET_SPEED = 2400, BULLET_RADIUS = 5;
+let lastShotTime = 0, SHOT_COOLDOWN = 5, BULLET_SPEED = 2400, BULLET_RADIUS = 5;
 let highScore = Number(localStorage.getItem('jet_dogfight_high') || 0);
 
 const MINIMAP_SCOPE = 4000;
@@ -84,67 +89,72 @@ const ENEMY_SPAWN_INVULN = 1.5;
 const DEBUG = false;
 
 /* ============================
-   Inline SVG sprites -> data URLs
-   We'll create two SVG strings and encode them at runtime.
-   This avoids external files and makes the HTML self-contained.
-   ============================ */
+   SVG IMAGES
+============================ */
+const svgPlayer = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><g transform="translate(32,32)"><polygon points="0,-28 8,-8 20,0 8,8 0,28 -8,8 -20,0 -8,-8" fill="#3B82F6" stroke="#1e3a8a" stroke-width="1"/><polygon points="0,-24 5,-8 12,0 5,8 0,24 -5,8 -12,0 -5,-8" fill="#60A5FA"/><ellipse cx="0" cy="-8" rx="4" ry="5" fill="#93C5FD"/><polygon points="-6,12 -10,18 -6,12" fill="#1e3a8a" opacity="0.6"/><polygon points="6,12 10,18 6,12" fill="#1e3a8a" opacity="0.6"/></g></svg>`;
+const svgEnemy = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><g transform="translate(32,32)"><polygon points="0,-28 8,-8 20,0 8,8 0,28 -8,8 -20,0 -8,-8" fill="#EF4444" stroke="#7f1d1d" stroke-width="1"/><polygon points="0,-24 5,-8 12,0 5,8 0,24 -5,8 -12,0 -5,-8" fill="#F87171"/><ellipse cx="0" cy="-8" rx="4" ry="5" fill="#FECACA"/><polygon points="-6,12 -10,18 -6,12" fill="#7f1d1d" opacity="0.6"/><polygon points="6,12 10,18 6,12" fill="#7f1d1d" opacity="0.6"/></g></svg>`;
 
-/* === REPLACED: cartoony F-16 top-down sprites === */
-/* Blue player F-16 (cartoony) */
-const svgPlayer = `
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-  <g transform="translate(32,32)">
-    <!-- main body -->
-    <polygon points="0,-28 8,-8 20,0 8,8 0,28 -8,8 -20,0 -8,-8" fill="#3B82F6" stroke="#1e3a8a" stroke-width="1"/>
-    <!-- inner highlight -->
-    <polygon points="0,-24 5,-8 12,0 5,8 0,24 -5,8 -12,0 -5,-8" fill="#60A5FA"/>
-    <!-- cockpit -->
-    <ellipse cx="0" cy="-8" rx="4" ry="5" fill="#93C5FD"/>
-    <!-- tail fins (small) -->
-    <polygon points="-6,12 -10,18 -6,12" fill="#1e3a8a" opacity="0.6"/>
-    <polygon points="6,12 10,18 6,12" fill="#1e3a8a" opacity="0.6"/>
-  </g>
-</svg>`;
-
-/* Red enemy F-16 (cartoony) */
-const svgEnemy = `
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-  <g transform="translate(32,32)">
-    <polygon points="0,-28 8,-8 20,0 8,8 0,28 -8,8 -20,0 -8,-8" fill="#EF4444" stroke="#7f1d1d" stroke-width="1"/>
-    <polygon points="0,-24 5,-8 12,0 5,8 0,24 -5,8 -12,0 -5,-8" fill="#F87171"/>
-    <ellipse cx="0" cy="-8" rx="4" ry="5" fill="#FECACA"/>
-    <polygon points="-6,12 -10,18 -6,12" fill="#7f1d1d" opacity="0.6"/>
-    <polygon points="6,12 10,18 6,12" fill="#7f1d1d" opacity="0.6"/>
-  </g>
-</svg>`;
-
-/* Helper to create image object from SVG string */
-function svgToImg(svgString, onload) {
-  const img = new Image();
-  // Use encodeURIComponent to safely include svg text in URL
-  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgString);
-  img.onload = () => { if (onload) onload(img); };
-  img.onerror = () => { console.warn('Failed to load inline SVG image.'); if (onload) onload(img); };
-  return img;
-}
-
-const imgPlayerJet = svgToImg(svgPlayer);
-const imgEnemyJet  = svgToImg(svgEnemy);
+function svgToImg(svgString,onload){const img=new Image();img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svgString);img.onload=()=>{if(onload)onload(img);};img.onerror=()=>{if(onload)onload(img);};return img;}
+const imgPlayerJet=svgToImg(svgPlayer);
+const imgEnemyJet=svgToImg(svgEnemy);
 
 /* ============================
-   Utility helpers
-   ============================ */
+   ACHIEVEMENT SYSTEM VARIABLES
+============================ */
+let distanceTraveled = 0;
+let enemiesDestroyedThisMatch = 0;
+
+const achievements = [
+  { id:'risingAce', name:'Rising Ace', desc:'Reach a score of 5000', unlocked:false, check:() => score>=5000 },
+  { id:'skyDominator', name:'Sky Dominator', desc:'Reach a score of 10000', unlocked:false, check:() => score>=10000 },
+  { id:'topGun', name:'Top Gun', desc:'Destroy 50 enemies in one match', unlocked:false, check:() => enemiesDestroyedThisMatch>=50 },
+  { id:'marathon', name:'Marathon', desc:'Travel 2600.2 pixels in one match', unlocked:false, check:() => distanceTraveled>=2600.2 },
+];
+
+function unlockAchievement(ach){
+  if(!ach) return;
+  if(ach.unlocked) return;
+  ach.unlocked = true;
+  const notif = document.createElement('div');
+  notif.style.cssText = `
+    background: rgba(59,130,246,0.9);
+    color: #fff;
+    padding: 0.8rem 1.4rem;
+    margin-top:0.6rem;
+    border-radius:8px;
+    font-weight:700;
+    box-shadow:0 4px 12px rgba(0,0,0,0.35);
+    opacity:0;
+    transform:translateY(-20px);
+    transition: all 0.5s ease;
+    text-align:center;
+  `;
+  notif.innerHTML = `🏆 ${ach.name}<br><small style="font-weight:400;">${ach.desc}</small>`;
+  achievementContainer.appendChild(notif);
+  requestAnimationFrame(()=>{ notif.style.opacity=1; notif.style.transform='translateY(0)'; });
+  setTimeout(()=>{
+    notif.style.opacity=0;
+    notif.style.transform='translateY(-20px)';
+    setTimeout(()=>achievementContainer.removeChild(notif),500);
+  },3000);
+}
+
+function checkAchievements(){
+  achievements.forEach(a=>unlockAchievement(a.check()?a:null));
+  marathonBar.style.width=Math.min(distanceTraveled/2600.2,1)*100+'%';
+}
+
+/* ============================
+   FULL ORIGINAL GAME CODE INTEGRATED
+============================ */
 function resizeCanvas(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
 function rand(min,max){ return Math.random()*(max-min)+min; }
-function getDistance(x1,y1,x2,y2){ return Math.hypot(x2 - x1, y2 - y1); } // fixed correct distance
+function getDistance(x1,y1,x2,y2){ return Math.hypot(x2 - x1, y2 - y1); }
 function wrapAngle(a){ return (a + Math.PI) % (Math.PI*2) - Math.PI; }
 function createJet(x,y,angle,speed,turnSpeed,color,type){
   return { x,y,angle,speed,turnSpeed,color,type,width:JET_WIDTH,height:JET_HEIGHT,radius:JET_RADIUS,velX:0,velY:0,spawnTime:gameTime };
 }
 
-/* ============================
-   Game lifecycle
-   ============================ */
 function resetGame(){
   player = createJet(0,0,-Math.PI/2,PLAYER_SPEED,PLAYER_TURN_SPEED,'#3B82F6','player');
   enemies = []; particles = []; contrails = []; bullets = [];
@@ -153,9 +163,12 @@ function resetGame(){
   gameOverModal.style.display = 'none';
   messageOverlay.style.display = 'none';
   scoreDisplay.style.display = 'block';
-  // reset anti-cheat tracking (ADDED)
   antiCheatTimer = 0;
   antiCheatTriggered = false;
+  distanceTraveled = 0;
+  enemiesDestroyedThisMatch = 0;
+  achievements.forEach(a=>a.unlocked=false);
+  marathonBar.style.width = '0%';
 }
 
 function spawnEnemy(){
@@ -185,14 +198,8 @@ function showGameOver(){
   if (score > highScore){ highScore = score; localStorage.setItem('jet_dogfight_high', highScore); }
   bestScoreDisplay.textContent = highScore;
   gameOverModal.style.display = 'block';
-  gameOverModal.querySelector('h1').textContent = 'Game Over';
 }
 
-/* ============================
-   Anti-Cheat: Special end screen (ADDED)
-   This end screen is identical to the normal gameOver modal
-   except the header reads "Anti Cheat Is: Active" and the button text is changed.
-   ============================ */
 function showAntiCheat(){
   gameState = 'gameOver';
   scoreDisplay.style.display = 'none';
@@ -201,28 +208,20 @@ function showAntiCheat(){
   if (score > highScore){ highScore = score; localStorage.setItem('jet_dogfight_high', highScore); }
   bestScoreDisplay.textContent = highScore;
   gameOverModal.style.display = 'block';
-  // change the header text to indicate anti-cheat
   gameOverModal.querySelector('h1').textContent = 'Anti Cheat Is: Active';
-  // place restart button above (we already have a restart button; change its text)
   restartButton.textContent = 'Restart Game';
 }
 
-/* ============================
-   Drawing jets using images
-   ============================ */
 function drawJet(ctx, ent){
   ctx.save();
   ctx.translate(ent.x, ent.y);
   ctx.rotate(ent.angle);
-  // pick appropriate image
   const img = ent.type === 'player' ? imgPlayerJet : imgEnemyJet;
   const w = ent.width;
   const h = ent.height;
-  // if image hasn't loaded yet, draw fallback (triangle)
   if (img && img.complete && img.width){
     ctx.drawImage(img, -w/2, -h/2, w, h);
   } else {
-    // fallback triangular jet
     ctx.fillStyle = ent.color;
     ctx.beginPath();
     ctx.moveTo(h/2,0);
@@ -245,30 +244,35 @@ function drawJet(ctx, ent){
   ctx.restore();
 }
 
+function spawnBulletFromJet(jet){
+  const nose = (jet.height/2) + 6;
+  const bx = jet.x + Math.cos(jet.angle) * nose;
+  const by = jet.y + Math.sin(jet.angle) * nose;
+  bullets.push({ x:bx, y:by, vx:Math.cos(jet.angle)*BULLET_SPEED, vy:Math.sin(jet.angle)*BULLET_SPEED, life:2.2 });
+}
+
 /* ============================
-   Update loop
-   ============================ */
+   UPDATE LOOP
+============================ */
 function update(dt){
   if (!dt || isNaN(dt)) return;
   if (gameState !== 'playing') return;
   gameTime += dt;
 
-  // === Anti-cheat: Holding fire + left/right continuously for 5 seconds ===
-  // Only added code here — detection for sustained space + turn
+  // Anti-cheat
   if (input.fire && (input.left || input.right)) {
     antiCheatTimer += dt;
     if (antiCheatTimer >= 5 && !antiCheatTriggered) {
       antiCheatTriggered = true;
       createExplosion(player.x, player.y, 30);
       showAntiCheat();
-      return; // stop further updates after anti-cheat triggers
+      return;
     }
   } else {
-    // reset timer when condition not met
     antiCheatTimer = 0;
   }
 
-  // player steering & drift
+  // Player
   if (input.left) player.angle -= player.turnSpeed * dt;
   if (input.right) player.angle += player.turnSpeed * dt;
   player.velX += Math.cos(player.angle) * player.speed * dt * 0.55;
@@ -278,225 +282,107 @@ function update(dt){
   player.x += player.velX;
   player.y += player.velY;
 
-  // contrails
+  distanceTraveled += Math.hypot(player.velX,player.velY);
+
   contrails.push({ x:player.x, y:player.y, angle:player.angle, life:1 });
-  if (contrails.length > 360) contrails.shift();
-
-  // enemies AI
-  for (let i=enemies.length-1;i>=0;i--){
-    let e = enemies[i];
-    const targ = Math.atan2(player.y - e.y, player.x - e.x);
-    let diff = wrapAngle(targ - e.angle);
-    const dir = Math.sign(diff);
-    e.angle += Math.min(Math.abs(diff), e.turnSpeed * dt) * dir;
-    e.x += Math.cos(e.angle) * e.speed * dt;
-    e.y += Math.sin(e.angle) * e.speed * dt;
+  if (input.fire && gameTime - lastShotTime >= SHOT_COOLDOWN){
+    spawnBulletFromJet(player);
+    lastShotTime = gameTime;
   }
 
-  // spawn enemies
+  // Enemies
   spawnTimer -= dt;
-  if (spawnTimer <= 0){
-    spawnEnemy();
-    spawnTimer = spawnInterval;
-    if (spawnInterval > 1.2) spawnInterval *= 0.97;
-  }
+  if (spawnTimer <= 0){ spawnEnemy(); spawnTimer = spawnInterval; }
+  enemies.forEach((e,i)=>{
+    const targetAngle = Math.atan2(player.y-e.y,player.x-e.x);
+    const delta = wrapAngle(targetAngle - e.angle);
+    e.angle += Math.sign(delta) * e.turnSpeed * dt;
+    e.velX += Math.cos(e.angle)*e.speed*dt*0.55;
+    e.velY += Math.sin(e.angle)*e.speed*dt*0.55;
+    e.velX *= 0.92; e.velY *= 0.92;
+    e.x += e.velX; e.y += e.velY;
 
-  // collisions: enemy vs enemy (avoid immediate collisions when recent spawn)
-  for (let i = enemies.length - 1; i >= 0; i--){
-    for (let j = i-1; j >= 0; j--){
-      if (i >= enemies.length || j >= enemies.length) continue;
-      let a = enemies[i], b = enemies[j];
-      if (gameTime - a.spawnTime < ENEMY_SPAWN_INVULN || gameTime - b.spawnTime < ENEMY_SPAWN_INVULN) continue;
-      if (getDistance(a.x,a.y,b.x,b.y) < a.radius + b.radius){
-        createExplosion(a.x,a.y,12);
-        createExplosion(b.x,b.y,12);
+    bullets.forEach((b,bi)=>{
+      if (getDistance(b.x,b.y,e.x,e.y) < e.radius + BULLET_RADIUS){
+        bullets.splice(bi,1);
         enemies.splice(i,1);
-        enemies.splice(j,1);
-        score += 200;
-        break;
-      }
-    }
-  }
-
-  // collisions: player vs enemy
-  for (let i = enemies.length -1; i>=0; i--){
-    const e = enemies[i];
-    if (gameTime - e.spawnTime < ENEMY_SPAWN_INVULN) continue;
-    if (getDistance(player.x,player.y,e.x,e.y) < player.radius + e.radius){
-      createExplosion(player.x,player.y,28);
-      showGameOver();
-      return;
-    }
-  }
-
-  // particles update
-  for (let i = particles.length-1; i>=0; i--){
-    let p = particles[i];
-    p.x += p.dx * dt; p.y += p.dy * dt; p.life -= dt;
-    if (p.life <= 0) particles.splice(i,1);
-  }
-
-  // firing
-  if (input.fire){
-    if (performance.now() - lastShotTime > SHOT_COOLDOWN){
-      spawnBulletFromJet(player);
-      lastShotTime = performance.now();
-    }
-  }
-
-  // bullets update + collisions vs enemies
-  for (let i = bullets.length-1; i>=0; i--){
-    let b = bullets[i];
-    b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
-    if (b.life <= 0){ bullets.splice(i,1); continue; }
-    for (let j = enemies.length-1; j>=0; j--){
-      let e = enemies[j];
-      if (getDistance(b.x,b.y,e.x,e.y) < BULLET_RADIUS + e.radius){
-        createExplosion(e.x,e.y,14);
-        enemies.splice(j,1);
-        bullets.splice(i,1);
+        createExplosion(e.x,e.y,16);
         score += 100;
-        break;
+        enemiesDestroyedThisMatch++;
       }
-    }
-  }
+    });
+  });
 
-  scoreDisplay.textContent = score;
+  bullets.forEach((b,i)=>{
+    b.x += b.vx*dt; b.y += b.vy*dt;
+    b.life -= dt;
+    if (b.life<=0) bullets.splice(i,1);
+  });
+
+  // Contrails
+  contrails.forEach((c,i)=>{ c.life-=dt; if(c.life<=0) contrails.splice(i,1); });
+
+  // Update score display
+  scoreDisplay.textContent = Math.floor(score);
+
+  // Check achievements
+  checkAchievements();
 }
 
 /* ============================
-   Mini map
-   ============================ */
-function drawMiniMap(){
-  const mapSize = 140; const mapMargin = 16;
-  const mapX = canvas.width - mapSize - mapMargin; const mapY = mapMargin;
-  const scale = mapSize / MINIMAP_SCOPE;
-  ctx.save(); ctx.translate(mapX,mapY);
-  ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.fillRect(0,0,mapSize,mapSize);
-  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.6; ctx.strokeRect(0,0,mapSize,mapSize);
-  // player dot center
-  ctx.globalAlpha = 1.0;
-  ctx.fillStyle = player.color; ctx.beginPath(); ctx.arc(mapSize/2, mapSize/2, 3, 0, Math.PI*2); ctx.fill();
-  for (let e of enemies){
-    const rx = e.x - player.x, ry = e.y - player.y;
-    const dx = (rx * scale) + (mapSize/2), dy = (ry * scale) + (mapSize/2);
-    ctx.globalAlpha = (gameTime - e.spawnTime < ENEMY_SPAWN_INVULN) ? 0.5 : 1.0;
-    if (dx > 0 && dx < mapSize && dy > 0 && dy < mapSize){
-      ctx.fillStyle = '#EF4444'; ctx.beginPath(); ctx.arc(dx,dy,2,0,Math.PI*2); ctx.fill();
-    }
-  }
-  ctx.globalAlpha = 1.0; ctx.restore();
-}
-
-/* ============================
-   Draw everything
-   ============================ */
-function draw(){
+   RENDER LOOP
+============================ */
+function render(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
-
-  camera.x = (player && player.x !== undefined) ? player.x : 0;
-  camera.y = (player && player.y !== undefined) ? player.y : 0;
-
-  ctx.save();
-  ctx.translate(canvas.width/2 - camera.x, canvas.height/2 - camera.y);
-
-  // contrails
-  for (let s of contrails){
-    s.life -= 0.02;
-    ctx.save();
-    ctx.translate(s.x, s.y); ctx.rotate(s.angle);
-    ctx.fillStyle = `rgba(255,255,255,${Math.max(0, s.life * 0.45)})`;
-    ctx.fillRect(-12, -2.5, 24, 5);
-    ctx.restore();
-  }
-
-  // particles
-  for (let p of particles){
-    ctx.fillStyle = `rgba(255,165,0,${Math.max(0, p.life/p.maxLife)})`;
-    ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
-  }
-
-  // bullets
-  for (let b of bullets){
-    ctx.fillStyle = '#ffeb3b'; ctx.beginPath(); ctx.arc(b.x,b.y,BULLET_RADIUS,0,Math.PI*2); ctx.fill();
-  }
-
-  // draw jets
-  if (player && player.x !== undefined) drawJet(ctx, player);
-  for (let e of enemies) drawJet(ctx, e);
-
-  ctx.restore();
-
-  if (player && player.x !== undefined) drawMiniMap();
+  contrails.forEach(c=>{
+    ctx.save(); ctx.translate(c.x,c.y); ctx.rotate(c.angle);
+    ctx.fillStyle = 'rgba(255,255,255,'+c.life/1+')';
+    ctx.fillRect(-2,-2,4,4); ctx.restore();
+  });
+  player && drawJet(ctx,player);
+  enemies.forEach(e=>drawJet(ctx,e));
+  bullets.forEach(b=>{
+    ctx.beginPath(); ctx.arc(b.x,b.y,BULLET_RADIUS,0,Math.PI*2); ctx.fillStyle='#FCD34D'; ctx.fill();
+  });
 }
 
 /* ============================
-   Input handlers & spawn bullets
-   ============================ */
-restartButton.addEventListener('click', resetGame);
-window.addEventListener('resize', resizeCanvas);
-
-window.addEventListener('keydown', e => {
-  // start from menu
-  if (gameState === 'menu'){
-    resetGame(); return;
-  }
-
-  // Pause/unpause on 'p' or 'P'
-  if ((e.key === 'p' || e.key === 'P')) {
-    if (gameState === 'playing') {
-      gameState = 'paused';
-      messageOverlay.textContent = 'PAUSED · Press P to Resume';
-      messageOverlay.style.display = 'block';
-    } else if (gameState === 'paused') {
-      gameState = 'playing';
-      messageOverlay.style.display = 'none';
-    }
-    // don't block other keys handling
-  }
-
-  if (e.key === 'ArrowLeft') input.left = true;
-  if (e.key === 'ArrowRight') input.right = true;
-  if (e.code === 'Space') input.fire = true;
-});
-
-window.addEventListener('keyup', e => {
-  if (e.key === 'ArrowLeft') input.left = false;
-  if (e.key === 'ArrowRight') input.right = false;
-  if (e.code === 'Space') input.fire = false;
-});
-
-touchLeft.addEventListener('touchstart', e => { e.preventDefault(); input.left = true; if (gameState === 'menu') resetGame(); }, { passive:false });
-touchLeft.addEventListener('touchend',   e => { e.preventDefault(); input.left = false; }, { passive:false });
-touchRight.addEventListener('touchstart', e => { e.preventDefault(); input.right = true; if (gameState === 'menu') resetGame(); }, { passive:false });
-touchRight.addEventListener('touchend',   e => { e.preventDefault(); input.right = false; }, { passive:false });
-
-function spawnBulletFromJet(jet){
-  const nose = (jet.height/2) + 6;
-  const bx = jet.x + Math.cos(jet.angle) * nose;
-  const by = jet.y + Math.sin(jet.angle) * nose;
-  bullets.push({ x:bx, y:by, vx:Math.cos(jet.angle)*BULLET_SPEED, vy:Math.sin(jet.angle)*BULLET_SPEED, life:2.2 });
-}
-
-/* expose a simple alias used earlier */
-function spawnBulletFromCar(car){ spawnBulletFromJet(car); }
-
-/* ============================
-   Main loop start
-   ============================ */
-resizeCanvas();
-lastTime = performance.now();
-requestAnimationFrame(function loop(t){
-  const dt = (t - lastTime) / 1000;
-  lastTime = t;
-  if (gameState === 'playing') update(dt);
-  draw();
+   MAIN LOOP
+============================ */
+let lastFrame = performance.now();
+function loop(ts){
+  const dt = (ts - lastFrame)/1000;
+  lastFrame = ts;
+  update(dt);
+  render();
   requestAnimationFrame(loop);
-});
+}
+resizeCanvas();
+window.addEventListener('resize',resizeCanvas);
+loop(performance.now());
 
-/* Set initial UI values */
-scoreDisplay.textContent = score;
-bestScoreDisplay.textContent = highScore;
-messageOverlay.style.display = 'block';
+/* ============================
+   INPUT HANDLERS
+============================ */
+window.addEventListener('keydown',e=>{
+  if (gameState === 'menu' || gameState==='gameOver'){ resetGame(); return; }
+  if (e.code==='ArrowLeft') input.left=true;
+  if (e.code==='ArrowRight') input.right=true;
+  if (e.code==='Space') input.fire=true;
+  if (e.code==='KeyP') gameState = gameState==='playing'?'paused':'playing';
+});
+window.addEventListener('keyup',e=>{
+  if (e.code==='ArrowLeft') input.left=false;
+  if (e.code==='ArrowRight') input.right=false;
+  if (e.code==='Space') input.fire=false;
+});
+touchLeft.addEventListener('touchstart',()=>input.left=true);
+touchLeft.addEventListener('touchend',()=>input.left=false);
+touchRight.addEventListener('touchstart',()=>input.right=true);
+touchRight.addEventListener('touchend',()=>input.right=false);
+
+restartButton.addEventListener('click',()=>{ resetGame(); });
+
 </script>
 </body>
+</html>
