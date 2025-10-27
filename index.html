@@ -1,3 +1,4 @@
+Oh shoot i forgot, can you just add it to this code:
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -79,10 +80,6 @@ let player = null, enemies = [], particles = [], contrails = [], bullets = [];
 let lastShotTime = 0, SHOT_COOLDOWN = 5 /*ms*/, BULLET_SPEED = 2400, BULLET_RADIUS = 5;
 let highScore = Number(localStorage.getItem('jet_dogfight_high') || 0);
 
-// === NEW: Overheat constants ===
-const SHOT_CAPACITY_MAX = 3.0; // 3 seconds of firing
-const SHOT_COOLDOWN_TIME = 5.0; // 5 seconds of cooldown
-
 const MINIMAP_SCOPE = 4000;
 const ENEMY_SPAWN_INVULN = 1.5;
 const DEBUG = false;
@@ -130,15 +127,8 @@ function resizeCanvas(){ canvas.width = window.innerWidth; canvas.height = windo
 function rand(min,max){ return Math.random()*(max-min)+min; }
 function getDistance(x1,y1,x2,y2){ return Math.hypot(x2 - x1, y2 - y1); }
 function wrapAngle(a){ return (a + Math.PI) % (Math.PI*2) - Math.PI; }
-
-// === MODIFIED: Added shotCapacity and shotCooldown for player ===
 function createJet(x,y,angle,speed,turnSpeed,color,type){
-  const jet = { x,y,angle,speed,turnSpeed,color,type,width:JET_WIDTH,height:JET_HEIGHT,radius:JET_RADIUS,velX:0,velY:0,spawnTime:gameTime };
-  if (type === 'player') {
-    jet.shotCapacity = SHOT_CAPACITY_MAX;
-    jet.shotCooldown = 0;
-  }
-  return jet;
+  return { x,y,angle,speed,turnSpeed,color,type,width:JET_WIDTH,height:JET_HEIGHT,radius:JET_RADIUS,velX:0,velY:0,spawnTime:gameTime };
 }
 
 /* ============================
@@ -175,7 +165,7 @@ function createExplosion(x,y,count){
     const speed = rand(40,220);
     const life = rand(0.6,1.6);
     particles.push({ x,y,dx:Math.cos(angle)*speed,dy:Math.sin(angle)*speed,life,maxLife:life,size:rand(2,5) });
-_ }
+  }
 }
 
 function showGameOver(){
@@ -325,7 +315,7 @@ function update(dt){
       if (i >= enemies.length || j >= enemies.length) continue;
       let a = enemies[i], b = enemies[j];
       if (gameTime - a.spawnTime < ENEMY_SPAWN_INVULN || gameTime - b.spawnTime < ENEMY_SPAWN_INVULN) continue;
-Â     if (getDistance(a.x,a.y,b.x,b.y) < a.radius + b.radius){
+      if (getDistance(a.x,a.y,b.x,b.y) < a.radius + b.radius){
         createExplosion(a.x,a.y,12);
         createExplosion(b.x,b.y,12);
         enemies.splice(i,1);
@@ -354,35 +344,13 @@ function update(dt){
     if (p.life <= 0) particles.splice(i,1);
   }
 
-  // === MODIFIED: Firing logic with Overheat ===
-  if (player.shotCooldown > 0) {
-    // Player is in cooldown
-    player.shotCooldown -= dt;
-    if (player.shotCooldown <= 0) {
-      player.shotCooldown = 0;
-      player.shotCapacity = SHOT_CAPACITY_MAX; // Refill!
+  // firing
+  if (input.fire){
+    if (performance.now() - lastShotTime > SHOT_COOLDOWN){
+      spawnBulletFromJet(player);
+      lastShotTime = performance.now();
     }
-  } else if (input.fire) {
-    // Player is NOT in cooldown and IS firing
-    if (player.shotCapacity > 0) {
-      // Has capacity, so shoot
-      player.shotCapacity -= dt; // Deplete capacity
-
-      if (performance.now() - lastShotTime > SHOT_COOLDOWN){
-        spawnBulletFromJet(player);
-        lastShotTime = performance.now();
-      }
-
-      if (player.shotCapacity <= 0) {
-        // Just ran out! Start cooldown.
-        player.shotCapacity = 0;
-        player.shotCooldown = SHOT_COOLDOWN_TIME;
-      }
-    }
-    // else: player has no capacity, so do nothing (can't shoot)
   }
-  // === END MODIFIED Firing logic ===
-
 
   // bullets update + collisions vs enemies
   for (let i = bullets.length-1; i>=0; i--){
@@ -429,45 +397,6 @@ function drawMiniMap(){
 }
 
 /* ============================
-    NEW: Overheat Bar
-    ============================ */
-function drawOverheatBar(){
-  if (!player) return;
-
-  const barWidth = 160;
-  const barHeight = 12;
-  const barX = (canvas.width / 2) - (barWidth / 2);
-  const barY = 60; // Positioned below the score
-
-  let fillPercent = 1.0;
-  let fillColor = 'rgba(255, 235, 59, 0.8)'; // Yellow for capacity
-
-  if (player.shotCooldown > 0) {
-    // We are in cooldown
-    fillPercent = player.shotCooldown / SHOT_COOLDOWN_TIME;
-    fillColor = 'rgba(239, 68, 68, 0.8)'; // Red for overheat
-  } else {
-    // We are not in cooldown, show capacity
-    fillPercent = player.shotCapacity / SHOT_CAPACITY_MAX;
-a    fillColor = 'rgba(255, 235, 59, 0.8)'; // Yellow for capacity
-  }
-
-  // Draw background
-  ctx.fillStyle = 'rgba(0,0,0,0.28)';
-  ctx.fillRect(barX, barY, barWidth, barHeight);
-
-  // Draw fill
-  ctx.fillStyle = fillColor;
-  ctx.fillRect(barX, barY, barWidth * fillPercent, barHeight);
-  
-  // Draw border
-  ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(barX, barY, barWidth, barHeight);
-}
-
-
-/* ============================
     Draw everything
     ============================ */
 function draw(){
@@ -506,14 +435,7 @@ function draw(){
 
   ctx.restore();
 
-  // === MODIFIED: Draw HUD elements ===
-  if (player && player.x !== undefined) {
-    drawMiniMap();
-    // Only draw overheat bar when playing
-    if (gameState === 'playing') {
-      drawOverheatBar();
-    }
-  }
+  if (player && player.x !== undefined) drawMiniMap();
 }
 
 /* ============================
@@ -523,7 +445,7 @@ restartButton.addEventListener('click', resetGame);
 window.addEventListener('resize', resizeCanvas);
 
 window.addEventListener('keydown', e => {
-i  if (gameState === 'menu'){
+  if (gameState === 'menu'){
     resetGame(); return;
   }
 
@@ -544,7 +466,7 @@ i  if (gameState === 'menu'){
 });
 
 window.addEventListener('keyup', e => {
-A  if (e.key === 'ArrowLeft') input.left = false;
+  if (e.key === 'ArrowLeft') input.left = false;
   if (e.key === 'ArrowRight') input.right = false;
   if (e.code === 'Space') input.fire = false;
 });
@@ -564,7 +486,7 @@ function spawnBulletFromJet(jet){
 function spawnBulletFromCar(car){ spawnBulletFromJet(car); }
 
 /* ============================
-s   Main loop start
+    Main loop start
     ============================ */
 resizeCanvas();
 lastTime = performance.now();
@@ -580,6 +502,60 @@ requestAnimationFrame(function loop(t){
 scoreDisplay.textContent = score;
 bestScoreDisplay.textContent = highScore;
 messageOverlay.style.display = 'block';
+</script>  <!-- This is the end of your current game script -->
+
+<!-- ADD THE OVERHEAT SCRIPT HERE -->
+<script>
+/* Overheat / Cooldown System */
+let overheatLevel = 0;          // Current overheat
+const OVERHEAT_MAX = 100;       // Max overheat before cooldown
+const OVERHEAT_INCREMENT = 12;  // Heat per shot
+const OVERHEAT_COOLDOWN_RATE = 30; // Heat lost per second when not firing
+let overheatActive = false;     // True if overheated
+
+const overheatDisplay = document.createElement('div');
+overheatDisplay.style.position = 'absolute';
+overheatDisplay.style.bottom = '8px';
+overheatDisplay.style.left = '50%';
+overheatDisplay.style.transform = 'translateX(-50%)';
+overheatDisplay.style.width = '200px';
+overheatDisplay.style.height = '12px';
+overheatDisplay.style.background = '#555';
+overheatDisplay.style.borderRadius = '6px';
+overheatDisplay.style.overflow = 'hidden';
+overheatDisplay.style.pointerEvents = 'none';
+document.body.appendChild(overheatDisplay);
+
+const overheatBar = document.createElement('div');
+overheatBar.style.width = '0%';
+overheatBar.style.height = '100%';
+overheatBar.style.background = '#F87171';
+overheatBar.style.transition = 'width 0.1s linear';
+overheatDisplay.appendChild(overheatBar);
+
+const originalUpdate = update;
+update = function(dt){
+    originalUpdate(dt);
+
+    if (!dt || isNaN(dt)) return;
+
+    if (input.fire && !overheatActive){
+        overheatLevel += OVERHEAT_INCREMENT;
+        if (overheatLevel >= OVERHEAT_MAX){
+            overheatLevel = OVERHEAT_MAX;
+            overheatActive = true;
+        }
+    } else if (!input.fire){
+        overheatLevel -= OVERHEAT_COOLDOWN_RATE * dt;
+        if (overheatLevel < 0) overheatLevel = 0;
+        if (overheatActive && overheatLevel <= 0) overheatActive = false;
+    }
+
+    if (overheatActive) input.fire = false;
+
+    overheatBar.style.width = (overheatLevel / OVERHEAT_MAX * 100) + '%';
+};
 </script>
+
 </body>
 </html>
