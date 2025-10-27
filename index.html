@@ -73,7 +73,7 @@ let spawnTimer = 0, spawnInterval = 4.5;
 
 const input = { left:false, right:false, fire:false };
 let player = null, enemies = [], particles = [], contrails = [], bullets = [];
-let lastShotTime = 0, SHOT_COOLDOWN = 15 /*ms*/, BULLET_SPEED = 2400, BULLET_RADIUS = 5;
+let lastShotTime = 0, SHOT_COOLDOWN = 5 /*ms*/, BULLET_SPEED = 2400, BULLET_RADIUS = 5;
 let highScore = Number(localStorage.getItem('jet_dogfight_high') || 0);
 
 const MINIMAP_SCOPE = 4000;
