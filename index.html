@@ -1,365 +1,502 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dogfight Destruction v1.0</title>
-    
-    <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            background-color: #333;
-            color: #fff;
-            font-family: Arial, sans-serif;
-            text-align: center;
-        }
-
-        canvas {
-            background-color: #000;
-            display: block;
-            margin: 0 auto;
-        }
-
-        h1, p {
-            margin: 10px 0;
-        }
-    </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>Dogfight Destruction v1.0</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{width:100%;height:100%;overflow:hidden;font-family:'Inter',sans-serif;background:#60A5FA;color:#0b2447;}
+  #gameCanvas{display:block;background:#bfdbfe;position:absolute;top:0;left:0;z-index:1;}
+  .ui-container{position:absolute;top:0;left:0;width:100%;height:100%;z-index:4;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;align-items:center;}
+  #scoreDisplay{font-size:2.4rem;font-weight:900;margin-top:1.5rem;text-shadow:0 0 8px rgba(255,255,255,0.3);pointer-events:auto;color:#0b2447;}
+  #messageOverlay{font-size:1.1rem;font-weight:700;text-align:center;animation:pulse 2s infinite;pointer-events:auto;color:#07203b;}
+  @keyframes pulse{0%{opacity:1;transform:scale(1);}50%{opacity:0.8;transform:scale(1.02);}100%{opacity:1;transform:scale(1);}}
+  #gameOverModal{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:6;background-color:#111827;padding:2rem;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.45);text-align:center;display:none;pointer-events:auto;color:#e6eef9;}
+  #gameOverModal h1{font-size:2rem;margin-bottom:0.5rem;}
+  #gameOverModal p{font-size:1rem;margin-bottom:1rem;color:#cbd5e1;}
+  #restartButton{font-family:'Inter',sans-serif;background:#3B82F6;color:white;border:none;padding:0.8rem 1.4rem;border-radius:8px;font-size:1rem;font-weight:800;cursor:pointer;transition:all 0.18s ease;box-shadow:0 6px 18px rgba(59,130,246,0.25);}
+  #restartButton:hover{transform:translateY(-3px); background:#2563EB;}
+  .touch-zone{position:absolute;top:0;width:50%;height:100%;z-index:3;pointer-events:auto;}
+  #touchLeft{left:0;}
+  #touchRight{right:0;}
+  .hint { position:absolute; bottom:18px; left:50%; transform:translateX(-50%); font-weight:700; pointer-events:none; color:rgba(3,37,65,0.9);}
+</style>
 </head>
 <body>
-    <canvas id="gameCanvas" width="400" height="600"></canvas>
-    
-    <script>
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
+<canvas id="gameCanvas"></canvas>
 
-        let player = {
-            x: canvas.width / 2 - 25,
-            y: canvas.height - 60,
-            width: 50,
-            height: 50,
-            speed: 5,
-            dx: 0
-        };
+<!-- Touch zones -->
+<div class="touch-zone" id="touchLeft"></div>
+<div class="touch-zone" id="touchRight"></div>
 
-        let bullets = [];
-        let enemies = [];
-        let keys = {};
-        let score = 0;
-        let highScore = localStorage.getItem('dogfightHighScore') || 0;
-        let gameOver = false;
-        let gameStarted = false;
-        let gamePaused = false;
-        let enemySpeed = 2;
-        let enemySpawnRate = 2000; // in ms
-        let lastEnemySpawn = 0;
-        let cheatingDetected = false;
-        let lastTime = 0;
-        let frameCount = 0;
-        let fps = 0;
+<div class="ui-container">
+  <div id="scoreDisplay">0</div>
+  <div id="messageOverlay">Tap Left/Right to Steer · Press any key to Start<br>Press <strong>P</strong> to Pause</div>
+  <div id="messageOverlay">Tap/Press Left/Right to Steer-Spacebar to Shoot · Press any key to Start<br>Press <strong>P</strong> to Pause</div>
+</div>
 
-        const playerImg = new Image();
-        playerImg.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAsQAAALEBGBJ04gAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAADdSURBVEiJrdW9LkMBGIDh909sYCSKaGxs/G9sBFtFEJsYJDbxL2JjGz8g3YAdhQy7C04kznlOS5KRJOfpbpLzAYvAo3bARfAJfGGKAEYtB1yARWAU2Kg2YJgVuATeAAN2gAWwBLR6DbBKYf6FNQB9AK/AXvAAXARGS1P0AKYJbJHvAWeAFaBDEdgR+AfYBNY0xYEVMI1sEfgM+KsaAy/AJjCGrAfYBN5TYBsoAbsBq8AacAJ8BXbVglsAGWAOuAK+M09sPXYvA3aBnTAN7BUP7hfsisAh8CNn5wBNAk78AfuXCQAAAABJRU5ErkJggg==';
+<div id="gameOverModal">
+  <h1>Game Over</h1>
+  <p>Your final score is: <strong><span id="finalScore">0</span></strong></p>
+  <p>High Score: <strong><span id="bestScore">0</span></strong></p>
+  <button id="restartButton">Retry</button>
+</div>
 
-        const enemyImg = new Image();
-        enemyImg.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAsQAAALEBGBJ04gAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAACVSURBVEiJ7ZYxCsAwDAS/0Puvmy4eILg46SAepKuHoIPgYFkQFDqJ/xYQBIrMv9iXhKQPjJLgCPQAbYBW0AOE/RXwAbaAWmALaAAp8EuwARSAFpACusAOUAUmOflpASeANtAD6ABtYBaQI9gBdAG6QAvg/QCzOflnAPwA7YBYwA7wA6wBSoL/gAfw03Opn/YPSvQBRu4Cy2YmAgIAAAAASUVORK5CYII=';
+<script>
+/* ============================
+   Setup + constants
+   ============================ */
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const scoreDisplay = document.getElementById('scoreDisplay');
+const messageOverlay = document.getElementById('messageOverlay');
+const gameOverModal = document.getElementById('gameOverModal');
+const finalScoreDisplay = document.getElementById('finalScore');
+const bestScoreDisplay = document.getElementById('bestScore');
+const restartButton = document.getElementById('restartButton');
+const touchLeft = document.getElementById('touchLeft');
+const touchRight = document.getElementById('touchRight');
 
-        document.addEventListener('keydown', (e) => {
-            if (!gameStarted && !cheatingDetected) {
-                gameStarted = true;
-                resetGame();
-                gameLoop(0);
-            }
-            keys[e.key] = true;
+let gameState = 'menu'; // menu | playing | paused | gameOver
+let score = 0, lastTime = 0, gameTime = 0;
 
-            if (e.key === ' ' && !gameOver && !gamePaused && gameStarted) {
-                shoot();
-            }
+/* === Anti-Cheat Vars (ADDED ONLY) === */
+let antiCheatTimer = 0;
+let antiCheatTriggered = false;
 
-            if (e.key.toLowerCase() === 'p' && gameStarted && !gameOver) {
-                gamePaused = !gamePaused;
-                if (!gamePaused) {
-                    requestAnimationFrame(gameLoop);
-                }
-            }
-        });
+const camera = { x:0, y:0 };
+const PLAYER_SPEED = 120;
+const PLAYER_TURN_SPEED = 3.5;
+const JET_WIDTH = 48, JET_HEIGHT = 48, JET_RADIUS = 16;
+const ENEMY_SPEED = 120, ENEMY_TURN_SPEED = 2.1;
+const MAX_ENEMIES = 5;
+let spawnTimer = 0, spawnInterval = 4.5;
 
-        document.addEventListener('keyup', (e) => {
-            keys[e.key] = false;
-        });
+const input = { left:false, right:false, fire:false };
+let player = null, enemies = [], particles = [], contrails = [], bullets = [];
+let lastShotTime = 0, SHOT_COOLDOWN = 5 /*ms*/, BULLET_SPEED = 2400, BULLET_RADIUS = 5;
+let highScore = Number(localStorage.getItem('jet_dogfight_high') || 0);
 
-        canvas.addEventListener('click', (e) => {
-            if (gameOver && !cheatingDetected) {
-                const rect = canvas.getBoundingClientRect();
-                const mouseX = e.clientX - rect.left;
-                const mouseY = e.clientY - rect.top;
+const MINIMAP_SCOPE = 4000;
+const ENEMY_SPAWN_INVULN = 1.5;
+const DEBUG = false;
 
-                if (mouseX > canvas.width / 2 - 50 && mouseX < canvas.width / 2 + 50 &&
-                    mouseY > canvas.height / 2 + 60 && mouseY < canvas.height / 2 + 90) {
-                    resetGame();
-                }
-            }
-        });
+/* ============================
+   Inline SVG sprites -> data URLs
+   We'll create two SVG strings and encode them at runtime.
+   This avoids external files and makes the HTML self-contained.
+   ============================ */
 
-        function shoot() {
-            const bullet = {
-                x: player.x + player.width / 2 - 2.5,
-                y: player.y,
-                width: 5,
-                height: 10,
-                speed: 10
-            };
-            bullets.push(bullet);
-        }
+/* === REPLACED: cartoony F-16 top-down sprites === */
+/* Blue player F-16 (cartoony) */
+const svgPlayer = `
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <g transform="translate(32,32)">
+    <!-- main body -->
+    <polygon points="0,-28 8,-8 20,0 8,8 0,28 -8,8 -20,0 -8,-8" fill="#3B82F6" stroke="#1e3a8a" stroke-width="1"/>
+    <!-- inner highlight -->
+    <polygon points="0,-24 5,-8 12,0 5,8 0,24 -5,8 -12,0 -5,-8" fill="#60A5FA"/>
+    <!-- cockpit -->
+    <ellipse cx="0" cy="-8" rx="4" ry="5" fill="#93C5FD"/>
+    <!-- tail fins (small) -->
+    <polygon points="-6,12 -10,18 -6,12" fill="#1e3a8a" opacity="0.6"/>
+    <polygon points="6,12 10,18 6,12" fill="#1e3a8a" opacity="0.6"/>
+  </g>
+</svg>`;
 
-        function spawnEnemy(timestamp) {
-            if (gameOver || gamePaused) return;
+/* Red enemy F-16 (cartoony) */
+const svgEnemy = `
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <g transform="translate(32,32)">
+    <polygon points="0,-28 8,-8 20,0 8,8 0,28 -8,8 -20,0 -8,-8" fill="#EF4444" stroke="#7f1d1d" stroke-width="1"/>
+    <polygon points="0,-24 5,-8 12,0 5,8 0,24 -5,8 -12,0 -5,-8" fill="#F87171"/>
+    <ellipse cx="0" cy="-8" rx="4" ry="5" fill="#FECACA"/>
+    <polygon points="-6,12 -10,18 -6,12" fill="#7f1d1d" opacity="0.6"/>
+    <polygon points="6,12 10,18 6,12" fill="#7f1d1d" opacity="0.6"/>
+  </g>
+</svg>`;
 
-            if (timestamp - lastEnemySpawn > enemySpawnRate) {
-                const size = 30;
-                const x = Math.random() * (canvas.width - size);
-                const y = -size;
-                enemies.push({ x, y, width: size, height: size });
-                lastEnemySpawn = timestamp;
+/* Helper to create image object from SVG string */
+function svgToImg(svgString, onload) {
+  const img = new Image();
+  // Use encodeURIComponent to safely include svg text in URL
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgString);
+  img.onload = () => { if (onload) onload(img); };
+  img.onerror = () => { console.warn('Failed to load inline SVG image.'); if (onload) onload(img); };
+  return img;
+}
 
-                // Increase difficulty
-                enemySpeed += 0.05;
-                if (enemySpawnRate > 500) {
-                    enemySpawnRate -= 10;
-                }
-            }
-        }
+const imgPlayerJet = svgToImg(svgPlayer);
+const imgEnemyJet  = svgToImg(svgEnemy);
 
-        function detectCollision(a, b) {
-            return a.x < b.x + b.width &&
-                   a.x + a.width > b.x &&
-                   a.y < b.y + b.height &&
-                   a.y + a.height > b.y;
-        }
+/* ============================
+   Utility helpers
+   ============================ */
+function resizeCanvas(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+function rand(min,max){ return Math.random()*(max-min)+min; }
+function getDistance(x1,y1,x2,y2){ return Math.hypot(x2 - x1, y2 - y1); } // fixed correct distance
+function wrapAngle(a){ return (a + Math.PI) % (Math.PI*2) - Math.PI; }
+function createJet(x,y,angle,speed,turnSpeed,color,type){
+  return { x,y,angle,speed,turnSpeed,color,type,width:JET_WIDTH,height:JET_HEIGHT,radius:JET_RADIUS,velX:0,velY:0,spawnTime:gameTime };
+}
 
-        function resetGame() {
-            player.x = canvas.width / 2 - 25;
-            player.y = canvas.height - 60;
-            bullets = [];
-            enemies = [];
-            score = 0;
-            gameOver = false;
-            gameStarted = true;
-            gamePaused = false;
-            enemySpeed = 2;
-            enemySpawnRate = 2000;
-            lastEnemySpawn = 0;
-        }
+/* ============================
+   Game lifecycle
+   ============================ */
+function resetGame(){
+  player = createJet(0,0,-Math.PI/2,PLAYER_SPEED,PLAYER_TURN_SPEED,'#3B82F6','player');
+  enemies = []; particles = []; contrails = []; bullets = [];
+  score = 0; gameTime = 0; spawnTimer = 1.8; spawnInterval = 4.5;
+  gameState = 'playing';
+  gameOverModal.style.display = 'none';
+  messageOverlay.style.display = 'none';
+  scoreDisplay.style.display = 'block';
+  // reset anti-cheat tracking (ADDED)
+  antiCheatTimer = 0;
+  antiCheatTriggered = false;
+}
 
-        function detectCheating() {
-            if (score > 50000 && enemySpeed < 3) {
-                cheatingDetected = true;
-                gameOver = true;
-                gameStarted = false;
-            }
-        }
+function spawnEnemy(){
+  if (enemies.length >= MAX_ENEMIES) return;
+  const spawnAngle = Math.random()*Math.PI*2;
+  const spawnDist = Math.max(canvas.width, canvas.height)*0.8;
+  const x = player.x + Math.cos(spawnAngle)*spawnDist;
+  const y = player.y + Math.sin(spawnAngle)*spawnDist;
+  const angle = Math.atan2(player.y - y, player.x - x);
+  enemies.push(createJet(x,y,angle,ENEMY_SPEED,ENEMY_TURN_SPEED,'#EF4444','enemy'));
+}
 
-        function drawAntiCheatScreen() {
-            ctx.fillStyle = '#f00';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#fff';
-            ctx.font = '30px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('Cheating Detected!', canvas.width / 2, canvas.height / 2 - 40);
-            ctx.font = '20px Arial';
-            ctx.fillText('Nice try, buddy.', canvas.width / 2, canvas.height / 2);
-            ctx.fillText(`Final Score: ${score}`, canvas.width / 2, canvas.height / 2 + 40);
-        }
+function createExplosion(x,y,count){
+  for(let i=0;i<count;i++){
+    const angle = Math.random()*Math.PI*2;
+    const speed = rand(40,220);
+    const life = rand(0.6,1.6);
+    particles.push({ x,y,dx:Math.cos(angle)*speed,dy:Math.sin(angle)*speed,life,maxLife:life,size:rand(2,5) });
+  }
+}
 
-        function drawStartScreen() {
-            ctx.fillStyle = '#fff';
-            ctx.font = '20px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('Tap/Press Left/Right to Steer', canvas.width / 2, canvas.height / 2 - 20);
-            ctx.fillText('Spacebar to Shoot', canvas.width / 2, canvas.height / 2 + 10);
-            ctx.font = '24px Arial';
-            ctx.fillText('Press any key to Start', canvas.width / 2, canvas.height / 2 + 60);
-            
-            ctx.font = '16px Arial';
-            ctx.fillText('Press P to Pause', canvas.width / 2, canvas.height - 30);
-        }
+function showGameOver(){
+  gameState = 'gameOver';
+  scoreDisplay.style.display = 'none';
+  messageOverlay.style.display = 'none';
+  finalScoreDisplay.textContent = score;
+  if (score > highScore){ highScore = score; localStorage.setItem('jet_dogfight_high', highScore); }
+  bestScoreDisplay.textContent = highScore;
+  gameOverModal.style.display = 'block';
+  gameOverModal.querySelector('h1').textContent = 'Game Over';
+}
 
-        function drawGameOver() {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+/* ============================
+   Anti-Cheat: Special end screen (ADDED)
+   This end screen is identical to the normal gameOver modal
+   except the header reads "Anti Cheat Is: Active" and the button text is changed.
+   ============================ */
+function showAntiCheat(){
+  gameState = 'gameOver';
+  scoreDisplay.style.display = 'none';
+  messageOverlay.style.display = 'none';
+  finalScoreDisplay.textContent = score;
+  if (score > highScore){ highScore = score; localStorage.setItem('jet_dogfight_high', highScore); }
+  bestScoreDisplay.textContent = highScore;
+  gameOverModal.style.display = 'block';
+  // change the header text to indicate anti-cheat
+  gameOverModal.querySelector('h1').textContent = 'Anti Cheat Is: Active';
+  // place restart button above (we already have a restart button; change its text)
+  restartButton.textContent = 'Restart Game';
+}
 
-            ctx.fillStyle = '#fff';
-            ctx.font = '40px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('Game Over', canvas.width / 2, canvas.height / 2 - 40);
+/* ============================
+   Drawing jets using images
+   ============================ */
+function drawJet(ctx, ent){
+  ctx.save();
+  ctx.translate(ent.x, ent.y);
+  ctx.rotate(ent.angle);
+  // pick appropriate image
+  const img = ent.type === 'player' ? imgPlayerJet : imgEnemyJet;
+  const w = ent.width;
+  const h = ent.height;
+  // if image hasn't loaded yet, draw fallback (triangle)
+  if (img && img.complete && img.width){
+    ctx.drawImage(img, -w/2, -h/2, w, h);
+  } else {
+    // fallback triangular jet
+    ctx.fillStyle = ent.color;
+    ctx.beginPath();
+    ctx.moveTo(h/2,0);
+    ctx.lineTo(-h/2, w/2);
+    ctx.lineTo(-h/3,0);
+    ctx.lineTo(-h/2, -w/2);
+    ctx.closePath();
+    ctx.fill();
+  }
+  if (ent.type === 'enemy' && gameTime - ent.spawnTime < ENEMY_SPAWN_INVULN) {
+    ctx.globalAlpha = 0.6;
+  }
+  if (DEBUG){
+    ctx.strokeStyle = '#00ff00';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(0,0,ent.radius,0,Math.PI*2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
 
-            ctx.font = '24px Arial';
-            ctx.fillText(`Your final score is: ${score}`, canvas.width / 2, canvas.height / 2 + 10);
-            ctx.fillText(`High Score: ${highScore}`, canvas.width / 2, canvas.height / 2 + 40);
+/* ============================
+   Update loop
+   ============================ */
+function update(dt){
+  if (!dt || isNaN(dt)) return;
+  if (gameState !== 'playing') return;
+  gameTime += dt;
 
-            // Draw Retry Button
-            ctx.fillStyle = '#4CAF50';
-            ctx.fillRect(canvas.width / 2 - 50, canvas.height / 2 + 60, 100, 30);
-            ctx.fillStyle = '#fff';
-            ctx.font = '20px Arial';
-            ctx.fillText('Retry', canvas.width / 2, canvas.height / 2 + 82);
-        }
+  // === Anti-cheat: Holding fire + left/right continuously for 5 seconds ===
+  // Only added code here — detection for sustained space + turn
+  if (input.fire && (input.left || input.right)) {
+    antiCheatTimer += dt;
+    if (antiCheatTimer >= 5 && !antiCheatTriggered) {
+      antiCheatTriggered = true;
+      createExplosion(player.x, player.y, 30);
+      showAntiCheat();
+      return; // stop further updates after anti-cheat triggers
+    }
+  } else {
+    // reset timer when condition not met
+    antiCheatTimer = 0;
+  }
 
-        function drawPauseScreen() {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#fff';
-            ctx.font = '40px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('Paused', canvas.width / 2, canvas.height / 2);
-        }
+  // player steering & drift
+  if (input.left) player.angle -= player.turnSpeed * dt;
+  if (input.right) player.angle += player.turnSpeed * dt;
+  player.velX += Math.cos(player.angle) * player.speed * dt * 0.55;
+  player.velY += Math.sin(player.angle) * player.speed * dt * 0.55;
+  player.velX *= 0.92;
+  player.velY *= 0.92;
+  player.x += player.velX;
+  player.y += player.velY;
 
-        function drawScore() {
-            ctx.fillStyle = '#fff';
-            ctx.font = '20px Arial';
-            ctx.textAlign = 'left';
-            ctx.fillText(`Score: ${score}`, 10, 20);
-            ctx.fillText(`High Score: ${highScore}`, 10, 45);
-        }
+  // contrails
+  contrails.push({ x:player.x, y:player.y, angle:player.angle, life:1 });
+  if (contrails.length > 360) contrails.shift();
 
-        function drawFPS() {
-            ctx.fillStyle = '#fff';
-            ctx.font = '16px Arial';
-            ctx.textAlign = 'right';
-            ctx.fillText(`FPS: ${fps}`, canvas.width - 10, 20);
-        }
+  // enemies AI
+  for (let i=enemies.length-1;i>=0;i--){
+    let e = enemies[i];
+    const targ = Math.atan2(player.y - e.y, player.x - e.x);
+    let diff = wrapAngle(targ - e.angle);
+    const dir = Math.sign(diff);
+    e.angle += Math.min(Math.abs(diff), e.turnSpeed * dt) * dir;
+    e.x += Math.cos(e.angle) * e.speed * dt;
+    e.y += Math.sin(e.angle) * e.speed * dt;
+  }
 
-        function update(timestamp) {
-            if (gameOver) {
-                if (score > highScore) {
-                    highScore = score;
-                    localStorage.setItem('dogfightHighScore', highScore);
-                }
-                return;
-            }
+  // spawn enemies
+  spawnTimer -= dt;
+  if (spawnTimer <= 0){
+    spawnEnemy();
+    spawnTimer = spawnInterval;
+    if (spawnInterval > 1.2) spawnInterval *= 0.97;
+  }
 
-            if (gamePaused) {
-                return;
-            }
+  // collisions: enemy vs enemy (avoid immediate collisions when recent spawn)
+  for (let i = enemies.length - 1; i >= 0; i--){
+    for (let j = i-1; j >= 0; j--){
+      if (i >= enemies.length || j >= enemies.length) continue;
+      let a = enemies[i], b = enemies[j];
+      if (gameTime - a.spawnTime < ENEMY_SPAWN_INVULN || gameTime - b.spawnTime < ENEMY_SPAWN_INVULN) continue;
+      if (getDistance(a.x,a.y,b.x,b.y) < a.radius + b.radius){
+        createExplosion(a.x,a.y,12);
+        createExplosion(b.x,b.y,12);
+        enemies.splice(i,1);
+        enemies.splice(j,1);
+        score += 200;
+        break;
+      }
+    }
+  }
 
-            if (!gameStarted) {
-                return;
-            }
-            
-            detectCheating();
-            if (cheatingDetected) {
-                return;
-            }
+  // collisions: player vs enemy
+  for (let i = enemies.length -1; i>=0; i--){
+    const e = enemies[i];
+    if (gameTime - e.spawnTime < ENEMY_SPAWN_INVULN) continue;
+    if (getDistance(player.x,player.y,e.x,e.y) < player.radius + e.radius){
+      createExplosion(player.x,player.y,28);
+      showGameOver();
+      return;
+    }
+  }
 
-            // Player movement
-            player.dx = 0;
-            if (keys['ArrowLeft'] || keys['a']) {
-                player.dx = -player.speed;
-            }
-            if (keys['ArrowRight'] || keys['d']) {
-                player.dx = player.speed;
-            }
-            player.x += player.dx;
+  // particles update
+  for (let i = particles.length-1; i>=0; i--){
+    let p = particles[i];
+    p.x += p.dx * dt; p.y += p.dy * dt; p.life -= dt;
+    if (p.life <= 0) particles.splice(i,1);
+  }
 
-            // Keep player in bounds
-            if (player.x < 0) player.x = 0;
-            if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+  // firing
+  if (input.fire){
+    if (performance.now() - lastShotTime > SHOT_COOLDOWN){
+      spawnBulletFromJet(player);
+      lastShotTime = performance.now();
+    }
+  }
 
-            // Update bullets
-            for (let i = bullets.length - 1; i >= 0; i--) {
-                bullets[i].y -= bullets[i].speed;
-                if (bullets[i].y < 0) {
-                    bullets.splice(i, 1);
-                }
-            }
+  // bullets update + collisions vs enemies
+  for (let i = bullets.length-1; i>=0; i--){
+    let b = bullets[i];
+    b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
+    if (b.life <= 0){ bullets.splice(i,1); continue; }
+    for (let j = enemies.length-1; j>=0; j--){
+      let e = enemies[j];
+      if (getDistance(b.x,b.y,e.x,e.y) < BULLET_RADIUS + e.radius){
+        createExplosion(e.x,e.y,14);
+        enemies.splice(j,1);
+        bullets.splice(i,1);
+        score += 100;
+        break;
+      }
+    }
+  }
 
-            // Update enemies
-            for (let i = enemies.length - 1; i >= 0; i--) {
-                enemies[i].y += enemySpeed;
-                if (enemies[i].y > canvas.height) {
-                    enemies.splice(i, 1);
-                }
-            }
+  scoreDisplay.textContent = score;
+}
 
-            // Collision detection
-            for (let i = bullets.length - 1; i >= 0; i--) {
-                for (let j = enemies.length - 1; j >= 0; j--) {
-                    if (detectCollision(bullets[i], enemies[j])) {
-                        bullets.splice(i, 1);
-                        enemies.splice(j, 1);
-                        score += 100;
-                        break; 
-                    }
-                }
-            }
+/* ============================
+   Mini map
+   ============================ */
+function drawMiniMap(){
+  const mapSize = 140; const mapMargin = 16;
+  const mapX = canvas.width - mapSize - mapMargin; const mapY = mapMargin;
+  const scale = mapSize / MINIMAP_SCOPE;
+  ctx.save(); ctx.translate(mapX,mapY);
+  ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.fillRect(0,0,mapSize,mapSize);
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.6; ctx.strokeRect(0,0,mapSize,mapSize);
+  // player dot center
+  ctx.globalAlpha = 1.0;
+  ctx.fillStyle = player.color; ctx.beginPath(); ctx.arc(mapSize/2, mapSize/2, 3, 0, Math.PI*2); ctx.fill();
+  for (let e of enemies){
+    const rx = e.x - player.x, ry = e.y - player.y;
+    const dx = (rx * scale) + (mapSize/2), dy = (ry * scale) + (mapSize/2);
+    ctx.globalAlpha = (gameTime - e.spawnTime < ENEMY_SPAWN_INVULN) ? 0.5 : 1.0;
+    if (dx > 0 && dx < mapSize && dy > 0 && dy < mapSize){
+      ctx.fillStyle = '#EF4444'; ctx.beginPath(); ctx.arc(dx,dy,2,0,Math.PI*2); ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1.0; ctx.restore();
+}
 
-            for (let i = enemies.length - 1; i >= 0; i--) {
-                if (detectCollision(player, enemies[i])) {
-                    gameOver = true;
-                    break;
-                }
-            }
+/* ============================
+   Draw everything
+   ============================ */
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
-            spawnEnemy(timestamp);
-        }
+  camera.x = (player && player.x !== undefined) ? player.x : 0;
+  camera.y = (player && player.y !== undefined) ? player.y : 0;
 
-        function draw() {
-            // Clear canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  ctx.translate(canvas.width/2 - camera.x, canvas.height/2 - camera.y);
 
-            if (cheatingDetected) {
-                drawAntiCheatScreen();
-                return;
-            }
+  // contrails
+  for (let s of contrails){
+    s.life -= 0.02;
+    ctx.save();
+    ctx.translate(s.x, s.y); ctx.rotate(s.angle);
+    ctx.fillStyle = `rgba(255,255,255,${Math.max(0, s.life * 0.45)})`;
+    ctx.fillRect(-12, -2.5, 24, 5);
+    ctx.restore();
+  }
 
-            // Draw player
-            ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
+  // particles
+  for (let p of particles){
+    ctx.fillStyle = `rgba(255,165,0,${Math.max(0, p.life/p.maxLife)})`;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
+  }
 
-            // Draw bullets
-            ctx.fillStyle = '#f00';
-            bullets.forEach(bullet => {
-                ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
-            });
+  // bullets
+  for (let b of bullets){
+    ctx.fillStyle = '#ffeb3b'; ctx.beginPath(); ctx.arc(b.x,b.y,BULLET_RADIUS,0,Math.PI*2); ctx.fill();
+  }
 
-            // Draw enemies
-            enemies.forEach(enemy => {
-                ctx.drawImage(enemyImg, enemy.x, enemy.y, enemy.width, enemy.height);
-            });
+  // draw jets
+  if (player && player.x !== undefined) drawJet(ctx, player);
+  for (let e of enemies) drawJet(ctx, e);
 
-            if (!gameStarted) {
-                drawStartScreen();
-            } else if (gameOver) {
-                drawGameOver();
-            } else if (gamePaused) {
-                drawPauseScreen();
-            } else {
-                drawScore();
-                drawFPS();
-            }
-        }
+  ctx.restore();
 
-        function gameLoop(timestamp) {
-            let deltaTime = timestamp - lastTime;
-            lastTime = timestamp;
-            frameCount++;
-            if (timestamp % 1000 < deltaTime) {
-                fps = frameCount;
-                frameCount = 0;
-            }
+  if (player && player.x !== undefined) drawMiniMap();
+}
 
-            update(timestamp);
-            draw();
+/* ============================
+   Input handlers & spawn bullets
+   ============================ */
+restartButton.addEventListener('click', resetGame);
+window.addEventListener('resize', resizeCanvas);
 
-            if (!gameOver && !gamePaused) {
-                requestAnimationFrame(gameLoop);
-            } else if (gameOver && cheatingDetected) {
-                // Stop loop if cheating is detected
-                return;
-            }
-        }
+window.addEventListener('keydown', e => {
+  // start from menu
+  if (gameState === 'menu'){
+    resetGame(); return;
+  }
 
-        // Initial call to start the screen
-        draw();
-    </script>
+  // Pause/unpause on 'p' or 'P'
+  if ((e.key === 'p' || e.key === 'P')) {
+    if (gameState === 'playing') {
+      gameState = 'paused';
+      messageOverlay.textContent = 'PAUSED · Press P to Resume';
+      messageOverlay.style.display = 'block';
+    } else if (gameState === 'paused') {
+      gameState = 'playing';
+      messageOverlay.style.display = 'none';
+    }
+    // don't block other keys handling
+  }
+
+  if (e.key === 'ArrowLeft') input.left = true;
+  if (e.key === 'ArrowRight') input.right = true;
+  if (e.code === 'Space') input.fire = true;
+});
+
+window.addEventListener('keyup', e => {
+  if (e.key === 'ArrowLeft') input.left = false;
+  if (e.key === 'ArrowRight') input.right = false;
+  if (e.code === 'Space') input.fire = false;
+});
+
+touchLeft.addEventListener('touchstart', e => { e.preventDefault(); input.left = true; if (gameState === 'menu') resetGame(); }, { passive:false });
+touchLeft.addEventListener('touchend',   e => { e.preventDefault(); input.left = false; }, { passive:false });
+touchRight.addEventListener('touchstart', e => { e.preventDefault(); input.right = true; if (gameState === 'menu') resetGame(); }, { passive:false });
+touchRight.addEventListener('touchend',   e => { e.preventDefault(); input.right = false; }, { passive:false });
+
+function spawnBulletFromJet(jet){
+  const nose = (jet.height/2) + 6;
+  const bx = jet.x + Math.cos(jet.angle) * nose;
+  const by = jet.y + Math.sin(jet.angle) * nose;
+  bullets.push({ x:bx, y:by, vx:Math.cos(jet.angle)*BULLET_SPEED, vy:Math.sin(jet.angle)*BULLET_SPEED, life:2.2 });
+}
+
+/* expose a simple alias used earlier */
+function spawnBulletFromCar(car){ spawnBulletFromJet(car); }
+
+/* ============================
+   Main loop start
+   ============================ */
+resizeCanvas();
+lastTime = performance.now();
+requestAnimationFrame(function loop(t){
+  const dt = (t - lastTime) / 1000;
+  lastTime = t;
+  if (gameState === 'playing') update(dt);
+  draw();
+  requestAnimationFrame(loop);
+});
+
+/* Set initial UI values */
+scoreDisplay.textContent = score;
+bestScoreDisplay.textContent = highScore;
+messageOverlay.style.display = 'block';
+</script>
 </body>
-</html>
