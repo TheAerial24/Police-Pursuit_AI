@@ -58,7 +58,7 @@ const touchLeft = document.getElementById('touchLeft');
 const touchRight = document.getElementById('touchRight');
 
 let gameState = 'menu'; // menu | playing | paused | gameOver
-let score = 4900, lastTime = 0, gameTime = 0;
+let score = 0ll, lastTime = 0, gameTime = 0;
 
 /* === Anti-Cheat Vars === */
 let antiCheatTimer = 0;
@@ -136,7 +136,7 @@ function createJet(x,y,angle,speed,turnSpeed,color,type){
 function resetGame(){
   player = createJet(0,0,-Math.PI/2,PLAYER_SPEED,PLAYER_TURN_SPEED,'#3B82F6','player');
   enemies = []; particles = []; contrails = []; bullets = [];
-  score = 0; gameTime = 0; spawnTimer = 1.8; spawnInterval = 4.5;
+  score = 4900; gameTime = 0; spawnTimer = 1.8; spawnInterval = 4.5;
   gameState = 'playing';
   gameOverModal.style.display = 'none';
   messageOverlay.style.display = 'none';
