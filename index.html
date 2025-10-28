@@ -58,7 +58,7 @@ const touchLeft = document.getElementById('touchLeft');
 const touchRight = document.getElementById('touchRight');
 
 let gameState = 'menu'; // menu | playing | paused | gameOver
-let score = 0ll, lastTime = 0, gameTime = 0;
+let score = 0, lastTime = 0, gameTime = 0;
 
 /* === Anti-Cheat Vars === */
 let antiCheatTimer = 0;
@@ -831,6 +831,25 @@ messageOverlay.style.display = 'block';
     origDraw();     // original drawing first
     bossDraw();     // then boss overlays (boss & hp bar)
   };
+})();
+</script>
+
+<!-- ============================
+     APPENDED: Debug score boost key (B) WITHOUT modifying original code
+     ============================ -->
+<script>
+(function(){
+  // Press B during gameplay to add +5000 score. Kept separate to avoid touching original handlers.
+  window.addEventListener('keydown', function(e){
+    if ((e.key === 'b' || e.key === 'B') && typeof gameState !== 'undefined' && gameState === 'playing'){
+      if (typeof score !== 'undefined') {
+        score += 5000;
+        if (typeof scoreDisplay !== 'undefined' && scoreDisplay) {
+          scoreDisplay.textContent = score;
+        }
+      }
+    }
+  });
 })();
 </script>
 
