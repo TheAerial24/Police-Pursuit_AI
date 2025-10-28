@@ -839,7 +839,6 @@ messageOverlay.style.display = 'block';
      ============================ -->
 <script>
 (function(){
-  // Press B during gameplay to add +5000 score. Kept separate to avoid touching original handlers.
   window.addEventListener('keydown', function(e){
     if ((e.key === 'b' || e.key === 'B') && typeof gameState !== 'undefined' && gameState === 'playing'){
       if (typeof score !== 'undefined') {
@@ -850,6 +849,137 @@ messageOverlay.style.display = 'block';
       }
     }
   });
+})();
+</script>
+
+<!-- ============================
+     APPENDED: Hearts (3 lives) + 1s Invincibility + Hit FX
+     ============================ -->
+<script>
+(function(){
+  const MAX_HEARTS = 3;
+  const INVINCIBILITY_MS = 1000;
+
+  let hearts = MAX_HEARTS;
+  let invincibleUntil = 0;
+  let fxParticles = [];
+  let flashAlpha = 0; // brief white flash overlay on hit
+
+  // ---------- HEART UI ----------
+  const heartsContainer = document.createElement('div');
+  heartsContainer.style.position = 'absolute';
+  heartsContainer.style.top = '16px';
+  heartsContainer.style.left = '16px';
+  heartsContainer.style.zIndex = '1001';
+  heartsContainer.style.display = 'flex';
+  heartsContainer.style.gap = '6px';
+  heartsContainer.style.pointerEvents = 'none';
+  document.body.appendChild(heartsContainer);
+
+  function heart(opacity=1, scale=1){
+    const wrap = document.createElement('div');
+    wrap.style.opacity = opacity;
+    wrap.style.transform = `scale(${scale})`;
+    wrap.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+    wrap.innerHTML = `
+      <svg viewBox="0 0 24 24" width="24" height="24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 21s-6.7-4.35-9.33-7.36C-0.48 10.35 1.2 5.7 5.07 5.07 7.3 4.7 9.1 6 12 8.6 14.9 6 16.7 4.7 18.93 5.07c3.86.63 5.55 5.28 2.4 8.57C18.7 16.65 12 21 12 21z"
+              fill="#ef4444" stroke="#7f1d1d" stroke-width="1"/>
+      </svg>`;
+    return wrap;
+  }
+  function renderHearts(){
+    heartsContainer.innerHTML = '';
+    for(let i=0;i<MAX_HEARTS;i++){
+      heartsContainer.appendChild(heart(i<hearts?1:0.25,i<hearts?1:0.9));
+    }
+  }
+  renderHearts();
+
+  // ---------- FX helpers ----------
+  function addSparks(x,y,color='#ffd54f',count=18){
+    for(let i=0;i<count;i++){
+      const a=Math.random()*Math.PI*2, s=140+Math.random()*160, l=0.22+Math.random()*0.35;
+      fxParticles.push({x,y,dx:Math.cos(a)*s,dy:Math.sin(a)*s,life:l,maxLife:l,size:2+Math.random()*3,color});
+    }
+  }
+  function addSmoke(x,y,color='rgba(80,80,80,0.5)',count=10){
+    for(let i=0;i<count;i++){
+      const a=Math.random()*Math.PI*2, s=30+Math.random()*60, l=0.8+Math.random()*0.8;
+      fxParticles.push({x,y,dx:Math.cos(a)*s,dy:Math.sin(a)*s,life:l,maxLife:l,size:6+Math.random()*10,color});
+    }
+  }
+
+  // ---------- Reset hook ----------
+  if (typeof window.resetGame === 'function'){
+    const _r = window.resetGame;
+    window.resetGame = function(){
+      hearts = MAX_HEARTS;
+      invincibleUntil = 0;
+      fxParticles.length = 0;
+      flashAlpha = 0;
+      renderHearts();
+      return _r.apply(this, arguments);
+    };
+  }
+
+  // ---------- Intercept Game Over to turn first hits into damage ----------
+  const _showGameOver = window.showGameOver;
+  window.showGameOver = function(){
+    const t = performance.now();
+    if (t < invincibleUntil) return; // ignore hits during i-frames
+    if (hearts > 1){
+      hearts--;
+      renderHearts();
+      invincibleUntil = t + INVINCIBILITY_MS;
+      flashAlpha = 0.35;
+      addSparks(player.x, player.y, '#f87171', 26);
+      addSmoke(player.x, player.y, 'rgba(255,120,120,0.35)', 14);
+      return; // don't end game; consume a heart instead
+    }
+    _showGameOver(); // out of hearts → normal game over
+  };
+
+  // ---------- Draw hook: overlay FX + flash ----------
+  const _draw = window.draw;
+  window.draw = function(){
+    _draw();
+
+    // decay flash
+    if (flashAlpha > 0) {
+      ctx.save();
+      ctx.globalAlpha = flashAlpha;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.restore();
+      flashAlpha = Math.max(0, flashAlpha - 0.06);
+    }
+
+    // draw FX particles in screen coords
+    const dt = 1/60;
+    for (let i=fxParticles.length-1;i>=0;i--){
+      const p = fxParticles[i];
+      p.x += p.dx * dt; p.y += p.dy * dt; p.life -= dt;
+      if (p.life <= 0){ fxParticles.splice(i,1); continue; }
+      const alpha = p.life / p.maxLife;
+      const sx = p.x - camera.x + canvas.width/2;
+      const sy = p.y - camera.y + canvas.height/2;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(sx, sy, p.size, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+  };
+
+  // ---------- Update hook: ambient smoke when low HP ----------
+  const _update = window.update;
+  window.update = function(dt){
+    _update(dt);
+    if (gameState === 'playing' && hearts === 1 && Math.random() < 0.05){
+      addSmoke(player.x, player.y, 'rgba(80,80,80,0.6)', 2);
+    }
+  };
 })();
 </script>
 
