@@ -12,7 +12,7 @@
   .ui-container{position:absolute;top:0;left:0;width:100%;height:100%;z-index:4;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;align-items:center;}
   #scoreDisplay{font-size:2.4rem;font-weight:900;margin-top:1.5rem;text-shadow:0 0 8px rgba(255,255,255,0.3);pointer-events:auto;color:#0b2447;}
   #messageOverlay{font-size:1.1rem;font-weight:700;text-align:center;animation:pulse 2s infinite;pointer-events:auto;color:#07203b;}
-  @keyframes pulse{0%{opacity:1;transform:scale(1);}50%{opacity:0.8;transform:scale(1.02);}100%{opacity:1;transform:scale(1);}}
+  @keyframes pulse{0%{opacity:1;transform:scale(1);}50%{opacity:0.8;transform:scale(1.02);}100%{opacity:1;}}
   #gameOverModal{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:6;background-color:#111827;padding:2rem;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.45);text-align:center;display:none;pointer-events:auto;color:#e6eef9;}
   #gameOverModal h1{font-size:2rem;margin-bottom:0.5rem;}
   #gameOverModal p{font-size:1rem;margin-bottom:1rem;color:#cbd5e1;}
@@ -504,24 +504,19 @@ messageOverlay.style.display = 'block';
 </script>
 
 <!-- ============================
-     APPENDED: Overheat / Cooldown (no modification of original code)
-     This script runs AFTER your original script and only adds the new feature.
+     APPENDED: Overheat / Cooldown plugin (unchanged, as you liked)
      ============================ -->
 <script>
 (function(){
-  // Configuration: 5s total shooting -> 10s cooldown
-  const SHOOT_LIMIT = 5.0;   // seconds allowed shooting
-  const COOLDOWN = 10.0;     // seconds cooldown
-  // UI colors: red -> orange
+  const SHOOT_LIMIT = 5.0;
+  const COOLDOWN = 10.0;
   const BAR_BG = 'rgba(0,0,0,0.36)';
-  const BAR_FILL = 'linear-gradient(90deg, #f43f5e 0%, #fb923c 100%)'; // red to orange
+  const BAR_FILL = 'linear-gradient(90deg, #f43f5e 0%, #fb923c 100%)';
 
-  // Internal state
-  let shootTimer = 0;       // time spent holding fire (accumulated while firing and allowed)
-  let cooldownTimer = 0;    // remaining cooldown time (counts down)
-  let state = 'ready';      // 'ready' or 'cooldown'
+  let shootTimer = 0;
+  let cooldownTimer = 0;
+  let state = 'ready';
 
-  // Create DOM bar centered bottom
   const container = document.createElement('div');
   container.style.position = 'absolute';
   container.style.bottom = '12px';
@@ -538,52 +533,34 @@ messageOverlay.style.display = 'block';
 
   const fill = document.createElement('div');
   fill.style.height = '100%';
-  fill.style.width = '100%'; // start full
+  fill.style.width = '100%';
   fill.style.background = BAR_FILL;
   fill.style.transition = 'width 0.06s linear';
   container.appendChild(fill);
 
-  // Preserve original spawn function and wrap it to prevent bullets during cooldown.
   if (typeof spawnBulletFromJet === 'function') {
     const originalSpawn = spawnBulletFromJet;
     window.spawnBulletFromJet = function(jet){
-      // When in cooldown, do NOT create bullets.
       if (state === 'cooldown') return;
-      // else call original
       return originalSpawn.call(this, jet);
     };
   }
 
-  // Tick function to update heat state -- we will hook into requestAnimationFrame by wrapping update.
   const originalUpdate = window.update;
-  if (typeof originalUpdate !== 'function') {
-    // If update isn't available for any reason, do nothing.
-    console.warn('Overheat system: original update() not found — overheat not activated.');
-    return;
-  }
+  if (typeof originalUpdate !== 'function') return;
 
   window.update = function(dt){
-    // Keep original behavior first (so anti-cheat checks still see input.fire)
     originalUpdate(dt);
 
-    // Now manage overheat state *separately* without modifying original code internals.
-    // If player is holding fire and we are ready, accumulate shooting time.
     if (state === 'ready') {
       if (input.fire) {
         shootTimer += dt;
         if (shootTimer >= SHOOT_LIMIT) {
-          // enter cooldown
           state = 'cooldown';
           cooldownTimer = COOLDOWN;
         }
-      } else {
-        // not firing -> slowly reduce shootTimer so it behaves like "you have up to 5s total while holding"
-        // But user specified "shoot for 5 seconds total" — treat it as continuous accumulation while holding
-        // (we will not decay shootTimer while not firing so partial holds count). If you prefer decay, I can change it.
-        // Keep as continuous accumulation only while holding -> do nothing here.
       }
     } else if (state === 'cooldown') {
-      // During cooldown, count down
       cooldownTimer -= dt;
       if (cooldownTimer <= 0) {
         cooldownTimer = 0;
@@ -592,27 +569,268 @@ messageOverlay.style.display = 'block';
       }
     }
 
-    // Update visual bar:
-    // - While ready: bar shows remaining shoot time (starts full and drains while shooting).
-    //   remaining fraction = max(0, (SHOOT_LIMIT - shootTimer) / SHOOT_LIMIT)
-    // - During cooldown: bar starts empty at start of cooldown and fills up to full when cooldown ends.
     if (state === 'ready') {
       const rem = Math.max(0, (SHOOT_LIMIT - shootTimer) / SHOOT_LIMIT);
       fill.style.width = (rem * 100) + '%';
-      // ensure fill gradient visible (if it was changed)
       fill.style.background = BAR_FILL;
-    } else { // cooldown
+    } else {
       const filled = Math.min(1, (COOLDOWN - cooldownTimer) / COOLDOWN);
       fill.style.width = (filled * 100) + '%';
-      // During cooldown make it more red (flash) — subtle pulse via opacity
       fill.style.background = BAR_FILL;
     }
+  };
+})();
+</script>
 
-    // Ensure shoot is blocked during cooldown by spawn wrapper (we used spawn wrapper),
-    // but we also ensure input.fire remains true for anti-cheat checks (so don't modify input.fire).
-    // That means anti-cheat behaviors remain identical.
+<!-- ============================
+     APPENDED: Boss System plugin (flying @ 5000, turret @ 10000)
+     No edits to original code.
+     ============================ -->
+<script>
+(function(){
+  // Config
+  const BOSS1_SCORE = 5000;   // Flying boss
+  const BOSS2_SCORE = 10000;  // Stationary turret boss
+  const BOSS_BONUS = 2000;
+
+  // Flying boss config (2x size of enemy)
+  const BOSS_JET = {
+    width: 48*2, height: 48*2, radius: 16*2,
+    speed: 150, turnSpeed: 2.3, color: '#DC2626', type:'bossJet',
+    maxHp: 40  // needs 40 bullet hits (tune as desired)
   };
 
+  // Turret boss config
+  const BOSS_TURRET = {
+    radius: 40, type:'bossTurret', maxHp: 60,
+    fireCooldown: 0.8, projectileSpeed: 420, projectileRadius: 6
+  };
+
+  const HP_BAR = { w: 360, h: 16, y: 18, bg:'rgba(0,0,0,0.35)', fill:'#ef4444', stroke:'#111' };
+
+  const state = {
+    active: false,
+    current: null, // the boss entity
+    type: null,
+    defeatedJet: false,
+    defeatedTurret: false,
+    bossShots: []
+  };
+
+  // Prevent regular enemy spawns while boss is active
+  if (typeof spawnEnemy === 'function') {
+    const origSpawnEnemy = spawnEnemy;
+    window.spawnEnemy = function(){
+      if (state.active) return; // block spawning during boss
+      return origSpawnEnemy.apply(this, arguments);
+    };
+  }
+
+  // Reset boss state on resetGame
+  if (typeof resetGame === 'function') {
+    const origReset = resetGame;
+    window.resetGame = function(){
+      state.active = false;
+      state.current = null;
+      state.type = null;
+      state.bossShots.length = 0;
+      // DO NOT reset defeated flags here so score thresholds still work after death
+      return origReset.apply(this, arguments);
+    };
+  }
+
+  function spawnBossJet(){
+    // Spawn just offscreen, similar to enemies
+    const spawnAngle = Math.random()*Math.PI*2;
+    const spawnDist = Math.max(canvas.width, canvas.height)*0.8;
+    const x = player.x + Math.cos(spawnAngle)*spawnDist;
+    const y = player.y + Math.sin(spawnAngle)*spawnDist;
+    const angle = Math.atan2(player.y - y, player.x - x);
+    state.current = {
+      x, y, angle,
+      speed: BOSS_JET.speed,
+      turnSpeed: BOSS_JET.turnSpeed,
+      width: BOSS_JET.width,
+      height: BOSS_JET.height,
+      radius: BOSS_JET.radius,
+      color: BOSS_JET.color,
+      type: BOSS_JET.type,
+      hp: BOSS_JET.maxHp, maxHp: BOSS_JET.maxHp
+    };
+    state.type = 'jet';
+    state.active = true;
+  }
+
+  function spawnBossTurret(){
+    // Place near map center relative to player
+    const x = player.x + 0; 
+    const y = player.y - 120; // just above player start area
+    state.current = {
+      x, y, angle: 0,
+      type: BOSS_TURRET.type,
+      hp: BOSS_TURRET.maxHp, maxHp: BOSS_TURRET.maxHp,
+      fireTimer: 0
+    };
+    state.type = 'turret';
+    state.active = true;
+  }
+
+  function bossUpdate(dt){
+    if (!state.active || !state.current) return;
+
+    if (state.type === 'jet'){
+      // Chase player (similar to enemy AI but beefier)
+      const b = state.current;
+      const targ = Math.atan2(player.y - b.y, player.x - b.x);
+      let diff = ((targ - b.angle + Math.PI) % (Math.PI*2)) - Math.PI;
+      b.angle += Math.min(Math.abs(diff), b.turnSpeed * dt) * Math.sign(diff);
+      b.x += Math.cos(b.angle) * b.speed * dt;
+      b.y += Math.sin(b.angle) * b.speed * dt;
+    } else if (state.type === 'turret'){
+      // Rotate to face player and fire projectiles
+      const b = state.current;
+      b.angle = Math.atan2(player.y - b.y, player.x - b.x);
+      b.fireTimer -= dt;
+      if (b.fireTimer <= 0){
+        b.fireTimer = BOSS_TURRET.fireCooldown;
+        // Fire a projectile towards player
+        const vx = Math.cos(b.angle) * BOSS_TURRET.projectileSpeed;
+        const vy = Math.sin(b.angle) * BOSS_TURRET.projectileSpeed;
+        state.bossShots.push({ x: b.x, y: b.y, vx, vy, r: BOSS_TURRET.projectileRadius, life: 6 });
+      }
+    }
+
+    // Boss shots update & player collision
+    for (let i=state.bossShots.length-1; i>=0; i--){
+      const s = state.bossShots[i];
+      s.x += s.vx * dt; s.y += s.vy * dt; s.life -= dt;
+      if (s.life <= 0){ state.bossShots.splice(i,1); continue; }
+      // collision vs player
+      const d = Math.hypot(s.x - player.x, s.y - player.y);
+      if (d < (s.r + player.radius)){
+        createExplosion(player.x, player.y, 28);
+        showGameOver();
+        return; // stop further processing this frame
+      }
+    }
+
+    // Player bullets vs boss collision
+    for (let i=bullets.length-1; i>=0; i--){
+      const b = bullets[i];
+      const dx = b.x - state.current.x;
+      const dy = b.y - state.current.y;
+      const dist = Math.hypot(dx, dy);
+      const hitR = (state.type === 'jet') ? state.current.radius : BOSS_TURRET.radius;
+      if (dist < (BULLET_RADIUS + hitR)){
+        bullets.splice(i,1);
+        state.current.hp -= 1; // each bullet = 1 damage (tune if needed)
+        // small hit explosion
+        particles.push({ x: b.x, y: b.y, dx: rand(-60,60), dy: rand(-60,60), life: 0.3, maxLife: 0.3, size: 3 });
+        if (state.current.hp <= 0){
+          // Big boom, bonus, clear boss
+          createExplosion(state.current.x, state.current.y, 60);
+          score += BOSS_BONUS;
+          state.active = false;
+          if (state.type === 'jet') state.defeatedJet = true;
+          if (state.type === 'turret') state.defeatedTurret = true;
+          state.type = null;
+          state.current = null;
+          state.bossShots.length = 0;
+          break;
+        }
+      }
+    }
+  }
+
+  function bossDraw(){
+    if (!state.active || !state.current) return;
+
+    // Draw world-space stuff with same camera transform as your draw()
+    ctx.save();
+    ctx.translate(canvas.width/2 - camera.x, canvas.height/2 - camera.y);
+
+    if (state.type === 'jet'){
+      const b = state.current;
+      // Draw big red jet using enemy sprite scaled up
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      ctx.rotate(b.angle);
+      const img = imgEnemyJet;
+      const w = b.width, h = b.height;
+      if (img && img.complete && img.width){
+        ctx.drawImage(img, -w/2, -h/2, w, h);
+      } else {
+        ctx.fillStyle = b.color;
+        ctx.beginPath();
+        ctx.moveTo(h/2,0);
+        ctx.lineTo(-h/2, w/2);
+        ctx.lineTo(-h/3,0);
+        ctx.lineTo(-h/2, -w/2);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
+    } else if (state.type === 'turret'){
+      const b = state.current;
+      // Base
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      ctx.fillStyle = '#7f1d1d';
+      ctx.beginPath(); ctx.arc(0,0,BOSS_TURRET.radius,0,Math.PI*2); ctx.fill();
+      // Barrel
+      ctx.rotate(b.angle);
+      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(0, -6, BOSS_TURRET.radius+18, 12);
+      ctx.restore();
+    }
+
+    // Boss projectiles
+    for (const s of state.bossShots){
+      ctx.fillStyle = '#ff6b6b';
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 2; ctx.stroke();
+    }
+
+    ctx.restore();
+
+    // Boss HP bar (screen space, top center)
+    const hp = state.current ? state.current.hp : 0;
+    const maxHp = state.current ? state.current.maxHp : 1;
+    const frac = Math.max(0, Math.min(1, hp / maxHp));
+    const x = (canvas.width - HP_BAR.w)/2;
+    const y = HP_BAR.y;
+
+    ctx.fillStyle = HP_BAR.bg;
+    ctx.fillRect(x, y, HP_BAR.w, HP_BAR.h);
+    ctx.fillStyle = HP_BAR.fill;
+    ctx.fillRect(x, y, HP_BAR.w * frac, HP_BAR.h);
+    ctx.strokeStyle = HP_BAR.stroke;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, HP_BAR.w, HP_BAR.h);
+  }
+
+  // Hook into update/draw safely after original + overheat
+  const origUpdate = window.update;
+  const origDraw = window.draw;
+
+  window.update = function(dt){
+    // Spawn logic (one boss at a time)
+    if (!state.active && gameState === 'playing'){
+      if (!state.defeatedJet && score >= BOSS1_SCORE){
+        spawnBossJet();
+      } else if (state.defeatedJet && !state.defeatedTurret && score >= BOSS2_SCORE){
+        spawnBossTurret();
+      }
+    }
+
+    origUpdate(dt); // keep original behaviors
+    bossUpdate(dt); // then boss behaviors
+  };
+
+  window.draw = function(){
+    origDraw();     // original drawing first
+    bossDraw();     // then boss overlays (boss & hp bar)
+  };
 })();
 </script>
 
