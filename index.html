@@ -972,3 +972,13 @@ messageOverlay.style.display = 'block';
   };
 })();
 </script>
+<script>
+window.addEventListener('load', function(){
+  const btn = document.getElementById('restartButton');
+  if (btn && typeof window.resetGame === 'function'){
+    btn.removeEventListener('click', resetGame);
+    btn.addEventListener('click', () => window.resetGame());
+  }
+});
+</script>
+
